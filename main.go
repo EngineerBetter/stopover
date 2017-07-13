@@ -17,9 +17,14 @@ func main() {
 	}
 
 	bearerToken := os.Getenv("CONCOURSE_BEARER_TOKEN")
+	url := os.Args[1]
+	team := os.Args[2]
+	pipeline := os.Args[3]
+	job := os.Args[4]
+	build := os.Args[5]
 
-	client := NewClient("https://arthropods.dpsas.io", bearerToken, true)
-	resourceVersions, _ := GetResourceVersions(client, "cf-ops", "ant", "opsman-apply-changes", "1")
+	client := NewClient(url, bearerToken, true)
+	resourceVersions, _ := GetResourceVersions(client, team, pipeline, job, build)
 	yaml, _ := GenerateYaml(resourceVersions)
 	fmt.Print(string(yaml))
 }
