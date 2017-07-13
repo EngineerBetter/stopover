@@ -9,6 +9,7 @@ import (
 	"gopkg.in/yaml.v2"
 	"net/http"
 	"os"
+	"strconv"
 )
 
 func main() {
@@ -67,7 +68,7 @@ func GetResourceVersions(client concourse.Client, teamName, pipelineName, jobNam
 	buildInputsOutputs, found, err := client.BuildResources(globalID)
 
 	if !found || err != nil {
-		return nil, errors.New("could not get resources for build with global ID " + string(globalID))
+		return nil, errors.New("could not get resources for build with global ID " + strconv.Itoa(globalID))
 	}
 
 	resourceVersions := make(map[string]atc.Version)
