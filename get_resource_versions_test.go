@@ -23,7 +23,7 @@ var _ = Describe("GetResourceVersions", func() {
 
 	BeforeEach(func() {
 		expectedStruct = map[string]atc.Version{}
-		expectedBytes, err := ioutil.ReadFile("expected_output.yml")
+		expectedBytes, err := ioutil.ReadFile("./fixtures/expected_output.yml")
 		Ω(err).ShouldNot(HaveOccurred())
 		Ω(expectedBytes).ShouldNot(BeEmpty())
 		err = yaml.Unmarshal(expectedBytes, expectedStruct)

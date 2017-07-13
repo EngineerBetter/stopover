@@ -98,7 +98,7 @@ var _ = Describe("Stopover", func() {
 		var expected string
 
 		BeforeEach(func() {
-			expectedBytes, err := ioutil.ReadFile("expected_output.yml")
+			expectedBytes, err := ioutil.ReadFile("./fixtures/expected_output.yml")
 			Ω(err).ShouldNot(HaveOccurred())
 			expected = string(expectedBytes)
 
