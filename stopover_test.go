@@ -22,7 +22,7 @@ var _ = Describe("Stopover", func() {
 	var binPath string
 	var session *gexec.Session
 	var args []string
-	var bearerTokenFromEnv = os.Getenv("CONCOURSE_BEARER_TOKEN")
+	var bearerTokenFromEnv = os.Getenv("ATC_BEARER_TOKEN")
 	var bearerTokenEnvVar string
 	var port string
 	var hfly *hoverfly.Hoverfly
@@ -33,7 +33,7 @@ var _ = Describe("Stopover", func() {
 		binPath, err = gexec.Build("github.com/EngineerBetter/stopover")
 		Ω(err).ShouldNot(HaveOccurred())
 
-		_, recording = os.LookupEnv("CONCOURSE_BEARER_TOKEN")
+		_, recording = os.LookupEnv("ATC_BEARER_TOKEN")
 
 		config := hoverfly.InitSettings()
 		config.TLSVerification = false
@@ -79,9 +79,9 @@ var _ = Describe("Stopover", func() {
 	BeforeEach(func() {
 		args = []string{}
 		if recording {
-			bearerTokenEnvVar = "CONCOURSE_BEARER_TOKEN=" + bearerTokenFromEnv
+			bearerTokenEnvVar = "ATC_BEARER_TOKEN=" + bearerTokenFromEnv
 		} else {
-			bearerTokenEnvVar = "CONCOURSE_BEARER_TOKEN=dummy-value"
+			bearerTokenEnvVar = "ATC_BEARER_TOKEN=dummy-value"
 		}
 
 	})
@@ -113,7 +113,7 @@ var _ = Describe("Stopover", func() {
 
 	var usage = regexp.QuoteMeta(`** Error: arguments not found
 Usage:
-$ export CONCOURSE_BEARER_TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJj....."
+$ export ATC_BEARER_TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJj....."
 $ stopover https://ci.server.tld my-team my-pipeline my-job job-build-id`)
 
 	Context("when no arguments are provided", func() {
@@ -123,7 +123,7 @@ $ stopover https://ci.server.tld my-team my-pipeline my-job job-build-id`)
 		})
 	})
 
-	Context("when the envvar CONCOURSE_BEARER_TOKEN is not set", func() {
+	Context("when the envvar ATC_BEARER_TOKEN is not set", func() {
 		BeforeEach(func() {
 			bearerTokenEnvVar = ""
 		})

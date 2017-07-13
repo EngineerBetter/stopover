@@ -13,11 +13,11 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 6 || os.Getenv("CONCOURSE_BEARER_TOKEN") == "" {
+	if len(os.Args) != 6 || os.Getenv("ATC_BEARER_TOKEN") == "" {
 		printUsageAndExit(1)
 	}
 
-	bearerToken := os.Getenv("CONCOURSE_BEARER_TOKEN")
+	bearerToken := os.Getenv("ATC_BEARER_TOKEN")
 	url := os.Args[1]
 	team := os.Args[2]
 	pipeline := os.Args[3]
@@ -94,7 +94,7 @@ func exitIfErr(err error) {
 func printUsageAndExit(status int) {
 	usage := `** Error: arguments not found
 Usage:
-$ export CONCOURSE_BEARER_TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJj....."
+$ export ATC_BEARER_TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJj....."
 $ stopover https://ci.server.tld my-team my-pipeline my-job job-build-id`
 	fmt.Fprintln(os.Stderr, usage)
 	os.Exit(status)
