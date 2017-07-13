@@ -5,6 +5,10 @@ import (
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gbytes"
 
+	"encoding/json"
+	"github.com/SpectoLabs/hoverfly/core"
+	"github.com/SpectoLabs/hoverfly/core/handlers/v2"
+	"github.com/SpectoLabs/hoverfly/core/modes"
 	"github.com/onsi/gomega/gexec"
 	"io/ioutil"
 	"os"
@@ -13,26 +17,78 @@ import (
 )
 
 var _ = Describe("Stopover", func() {
+	simulation_path := "./fixtures/http_conversation.json"
+
 	var binPath string
 	var session *gexec.Session
 	var args []string
 	var bearerTokenFromEnv = os.Getenv("CONCOURSE_BEARER_TOKEN")
-	var bearerToken string
+	var bearerTokenEnvVar string
+	var port string
+	var hfly *hoverfly.Hoverfly
+	var recording bool
 
 	BeforeSuite(func() {
 		var err error
 		binPath, err = gexec.Build("github.com/EngineerBetter/stopover")
 		Ω(err).ShouldNot(HaveOccurred())
+
+		_, recording = os.LookupEnv("CONCOURSE_BEARER_TOKEN")
+
+		config := hoverfly.InitSettings()
+		config.TLSVerification = false
+
+		hfly = hoverfly.NewHoverflyWithConfiguration(config)
+
+		if recording {
+			config.SetMode(modes.Capture)
+		} else {
+			config.SetMode(modes.Simulate)
+
+			bytes, err := ioutil.ReadFile(simulation_path)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			simulation := v2.SimulationViewV3{}
+			err = json.Unmarshal(bytes, &simulation)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			err = hfly.PutSimulation(simulation)
+			Ω(err).ShouldNot(HaveOccurred())
+		}
+
+		err = hfly.StartProxy()
+		Ω(err).ShouldNot(HaveOccurred())
+		port = hfly.Cfg.ProxyPort
+	})
+
+	AfterSuite(func() {
+		if recording {
+			simulation, err := hfly.GetSimulation()
+			Ω(err).ShouldNot(HaveOccurred())
+
+			bytes, err := json.Marshal(simulation)
+			Ω(err).ShouldNot(HaveOccurred())
+
+			err = ioutil.WriteFile(simulation_path, bytes, 0644)
+			Ω(err).ShouldNot(HaveOccurred())
+		}
+
+		hfly.StopProxy()
 	})
 
 	BeforeEach(func() {
 		args = []string{}
-		bearerToken = "CONCOURSE_BEARER_TOKEN=" + bearerTokenFromEnv
+		if recording {
+			bearerTokenEnvVar = "CONCOURSE_BEARER_TOKEN=" + bearerTokenFromEnv
+		} else {
+			bearerTokenEnvVar = "CONCOURSE_BEARER_TOKEN=dummy-value"
+		}
+
 	})
 
 	JustBeforeEach(func() {
 		command := exec.Command(binPath, args...)
-		command.Env = append(command.Env, bearerToken)
+		command.Env = append(command.Env, bearerTokenEnvVar, "HTTP_PROXY=http://localhost:"+port, "HTTPS_PROXY=https://localhost:"+port)
 		var err error
 		session, err = gexec.Start(command, GinkgoWriter, GinkgoWriter)
 		Ω(err).ShouldNot(HaveOccurred())
@@ -69,7 +125,7 @@ $ stopover https://ci.server.tld my-team my-pipeline my-job job-build-id`)
 
 	Context("when the envvar CONCOURSE_BEARER_TOKEN is not set", func() {
 		BeforeEach(func() {
-			bearerToken = ""
+			bearerTokenEnvVar = ""
 		})
 
 		It("exits 1 and prints usage", func() {

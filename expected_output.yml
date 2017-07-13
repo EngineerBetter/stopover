@@ -2,8 +2,5 @@ resource_version_config-repo:
   ref: 14a1260f1fe39088fcde02fedb8de30da435dd61
 resource_version_ert-config:
   ref: d3fa445682b68c6869fa9866ef69b31de0ec25ce
-resource_version_iaas-tf:
-  env_name: iaas
-  last_modified: 2017-07-06T12:00:57Z
 resource_version_om-cli:
   version_id: Q.6uemV1Y5FPnTo5sAQbwHINdMPnEoaP

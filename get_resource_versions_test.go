@@ -69,13 +69,6 @@ var _ = Describe("GetResourceVersions", func() {
 							},
 						},
 						{
-							Resource: "iaas-tf",
-							Version: atc.Version{
-								"env_name":      "iaas",
-								"last_modified": "2017-07-06T12:00:57Z",
-							},
-						},
-						{
 							Resource: "om-cli",
 							Version: atc.Version{
 								"version_id": "Q.6uemV1Y5FPnTo5sAQbwHINdMPnEoaP",
