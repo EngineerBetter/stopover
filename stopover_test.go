@@ -87,4 +87,15 @@ $ stopover https://ci.server.tld my-team my-pipeline my-job job-build-id`)
 			Eventually(session).Should(gexec.Exit(1))
 		})
 	})
+
+	Context("when the URL is invalid", func() {
+		BeforeEach(func() {
+			args = []string{"not-valid-url", "team", "pipeline", "job", "1"}
+		})
+
+		It("exits 1 with a useful error message", func() {
+			Eventually(session).Should(gexec.Exit(1))
+			Ω(session.Err).Should(Say("could not get build for job"))
+		})
+	})
 })

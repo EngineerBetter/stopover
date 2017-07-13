@@ -24,7 +24,8 @@ func main() {
 	build := os.Args[5]
 
 	client := NewClient(url, bearerToken, true)
-	resourceVersions, _ := GetResourceVersions(client, team, pipeline, job, build)
+	resourceVersions, err := GetResourceVersions(client, team, pipeline, job, build)
+	exitIfErr(err)
 	yaml, _ := GenerateYaml(resourceVersions)
 	fmt.Print(string(yaml))
 }
@@ -58,14 +59,14 @@ func GetResourceVersions(client concourse.Client, teamName, pipelineName, jobNam
 	build, found, err := team.JobBuild(pipelineName, jobName, buildName)
 
 	if !found || err != nil {
-		return nil, errors.New("stuff didn't work")
+		return nil, errors.New("could not get build for job")
 	}
 
 	globalID := build.ID
 	buildInputsOutputs, found, err := client.BuildResources(globalID)
 
 	if !found || err != nil {
-		return nil, errors.New("stuff didn't work")
+		return nil, errors.New("could not get resources for build with global ID " + string(globalID))
 	}
 
 	resourceVersions := make(map[string]atc.Version)
@@ -79,6 +80,13 @@ func GetResourceVersions(client concourse.Client, teamName, pipelineName, jobNam
 
 func GenerateYaml(resourceVersions map[string]atc.Version) ([]byte, error) {
 	return yaml.Marshal(resourceVersions)
+}
+
+func exitIfErr(err error) {
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
 func printUsageAndExit(status int) {
