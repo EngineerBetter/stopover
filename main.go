@@ -26,7 +26,8 @@ func main() {
 	client := NewClient(url, bearerToken, true)
 	resourceVersions, err := GetResourceVersions(client, team, pipeline, job, build)
 	exitIfErr(err)
-	yaml, _ := GenerateYaml(resourceVersions)
+	yaml, err := GenerateYaml(resourceVersions)
+	exitIfErr(err)
 	fmt.Print(string(yaml))
 }
 
