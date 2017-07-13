@@ -6,21 +6,20 @@ import (
 
 	"github.com/concourse/atc"
 	"github.com/concourse/go-concourse/concourse"
+	"github.com/concourse/go-concourse/concourse/concoursefakes"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
-	"os"
 )
 
 var _ = Describe("GetResourceVersions", func() {
 
-	var bearerToken = os.Getenv("CONCOURSE_BEARER_TOKEN")
 	var teamName = "cf-ops"
 	var pipelineName = "ant"
 	var jobName = "opsman-apply-changes"
 	var buildName = "1"
 
 	var expectedStruct map[string]atc.Version
-	var client concourse.Client
+	var client *concoursefakes.FakeClient
 
 	BeforeEach(func() {
 		expectedStruct = map[string]atc.Version{}
@@ -30,7 +29,64 @@ var _ = Describe("GetResourceVersions", func() {
 		err = yaml.Unmarshal(expectedBytes, expectedStruct)
 		Ω(err).ShouldNot(HaveOccurred())
 
-		client = NewClient("https://arthropods.dpsas.io", bearerToken, true)
+		fakeTeam := new(concoursefakes.FakeTeam)
+		fakeTeam.JobBuildStub = func(pipeline, job, build string) (atc.Build, bool, error) {
+			if pipeline == "ant" && job == "opsman-apply-changes" && build == "1" {
+				return atc.Build{ID: 2098}, true, nil
+			}
+
+			return atc.Build{}, false, nil
+		}
+
+		wrongTeam := new(concoursefakes.FakeTeam)
+		wrongTeam.JobBuildStub = func(pipeline, job, build string) (atc.Build, bool, error) {
+			return atc.Build{}, false, nil
+		}
+
+		client = new(concoursefakes.FakeClient)
+		client.TeamStub = func(teamName string) concourse.Team {
+			if teamName == "cf-ops" {
+				return fakeTeam
+			}
+
+			return wrongTeam
+		}
+
+		client.BuildResourcesStub = func(buildID int) (atc.BuildInputsOutputs, bool, error) {
+			if buildID == 2098 {
+				return atc.BuildInputsOutputs{
+					Inputs: []atc.PublicBuildInput{
+						{
+							Resource: "config-repo",
+							Version: atc.Version{
+								"ref": "14a1260f1fe39088fcde02fedb8de30da435dd61",
+							},
+						},
+						{
+							Resource: "ert-config",
+							Version: atc.Version{
+								"ref": "d3fa445682b68c6869fa9866ef69b31de0ec25ce",
+							},
+						},
+						{
+							Resource: "iaas-tf",
+							Version: atc.Version{
+								"env_name":      "iaas",
+								"last_modified": "2017-07-06T12:00:57Z",
+							},
+						},
+						{
+							Resource: "om-cli",
+							Version: atc.Version{
+								"version_id": "Q.6uemV1Y5FPnTo5sAQbwHINdMPnEoaP",
+							},
+						},
+					},
+				}, true, nil
+			}
+
+			return atc.BuildInputsOutputs{}, false, nil
+		}
 	})
 
 	It("returns the expected stuff", func() {
