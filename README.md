@@ -3,6 +3,13 @@
 Emits a YAML file listing versions of all resources for a given
 Concourse build.
 
+## Usage
+
+```
+$ export ATC_BEARER_TOKEN=foo
+$ stopover https://ci.domain.com team-name pipeline job build-number
+```
+
 ## Testing
 
 To test using saved HTTP requests/responses:
