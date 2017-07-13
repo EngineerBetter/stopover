@@ -1,9 +1,11 @@
-package main
+package main_test
 
 import (
-	"github.com/concourse/atc"
+	. "github.com/EngineerBetter/stopover"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/concourse/atc"
 	"gopkg.in/yaml.v2"
 )
 
