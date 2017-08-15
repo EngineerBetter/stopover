@@ -48,7 +48,7 @@ var _ = Describe("Stopover", func() {
 			bytes, err := ioutil.ReadFile(simulation_path)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			simulation := v2.SimulationViewV3{}
+			simulation := v2.SimulationViewV4{}
 			err = json.Unmarshal(bytes, &simulation)
 			Ω(err).ShouldNot(HaveOccurred())
 

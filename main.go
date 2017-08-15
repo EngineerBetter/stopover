@@ -35,6 +35,7 @@ func main() {
 func NewClient(url, bearerToken string, ignoreTls bool) concourse.Client {
 	// Initialise the default client before modifying its Transport in place
 	// Panic occurs if this isn't done
+	var tracing = false
 	_, _ = http.DefaultClient.Get("http://127.0.0.1")
 
 	tr := http.DefaultTransport.(*http.Transport)
@@ -52,7 +53,7 @@ func NewClient(url, bearerToken string, ignoreTls bool) concourse.Client {
 
 	httpClient := &http.Client{Transport: transport}
 
-	return concourse.NewClient(url, httpClient)
+	return concourse.NewClient(url, httpClient, tracing)
 }
 
 func GetResourceVersions(client concourse.Client, teamName, pipelineName, jobName, buildName string) (map[string]atc.Version, error) {
