@@ -10,11 +10,26 @@ $ export ATC_BEARER_TOKEN=foo
 $ stopover https://ci.domain.com team-name pipeline job build-number
 ```
 
+## Resource Versions File
+
+`stopover` outputs a file of the following format:
+
+```
+resource_version_some-git-repo:
+  ref: fce993c58725102a01d9376714e386f7bb011e2f
+resource_version_ert-release:
+  path: elastic-runtime/1/cf-1.11.16.pivotal
+resource_version_metadata:
+  random: "19401"
+resource_version_p-mysql-release:
+  path: mysql/1/p-mysql-1.10.5.pivotal
+```
+
 ## Using `stopover` to pin Resource Versions
 
-You can automatically pin Concourse pipelines to specific versions of resources by using a file created by`stopover`.
+You can automatically pin Concourse pipelines to specific versions of resources by using a file created by`stopover`. This allows you to re-use the exact same pipeline YAML for different environments. We use this pattern for pipelines that deploy Cloud Foundry.
 
-If you `put` this to a resource, then _other_ pipelines can be triggered by changes to this version file. These pipelines can then call `fly set-pipeline` on themselves or others, providing a `load-vars-from` flag pointing to the resource versions file. If the pipelines being set have their `version` blocks parameterised, then this will result in the pipeline _only_ being able to use those specified versions.
+If you `put` this to a resource, then _other_ pipelines can be triggered by changes to this version file. These pipelines can then call `fly set-pipeline` on themselves or others, providing a `load-vars-from` flag pointing to the resource versions file. If the pipelines being set have their `version` blocks parameterised using Concourse's newer `(())` syntax, then this will result in the pipeline _only_ being able to use those specified versions.
 
 ### Getting the versions file
 
