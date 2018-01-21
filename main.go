@@ -1,64 +1,48 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"github.com/concourse/atc"
-	"github.com/concourse/go-concourse/concourse"
-	"github.com/pkg/errors"
-	"golang.org/x/oauth2"
-	"gopkg.in/yaml.v2"
-	"net/http"
 	"os"
 	"strconv"
+	"strings"
+
+	"github.com/concourse/atc"
+	flyrc "github.com/concourse/fly/rc"
+	"github.com/concourse/go-concourse/concourse"
+	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
+)
+
+var (
+	target  = flag.String("target", "", "fly target")
+	jobFlag = flag.String("job", "", "PIELINE/JOB")
+	build   = flag.String("build", "", "build number")
 )
 
 func main() {
-	if len(os.Args) != 6 || os.Getenv("ATC_BEARER_TOKEN") == "" {
+	flag.Parse()
+
+	if *target == "" {
 		printUsageAndExit(1)
 	}
+	t, err := flyrc.LoadTarget(flyrc.TargetName(*target), false)
+	exitIfErr(err)
 
-	bearerToken := os.Getenv("ATC_BEARER_TOKEN")
-	url := os.Args[1]
-	team := os.Args[2]
-	pipeline := os.Args[3]
-	job := os.Args[4]
-	build := os.Args[5]
-
-	client := NewClient(url, bearerToken, true)
-	resourceVersions, err := GetResourceVersions(client, team, pipeline, job, build)
+	splitJob := strings.SplitN(*jobFlag, "/", 2)
+	if len(splitJob) != 2 {
+		printUsageAndExit(1)
+	}
+	pipeline := splitJob[0]
+	job := splitJob[1]
+	resourceVersions, err := GetResourceVersions(t.Client(), t.Team(), pipeline, job, *build)
 	exitIfErr(err)
 	yaml, err := GenerateYaml(resourceVersions)
 	exitIfErr(err)
 	fmt.Print(string(yaml))
 }
 
-func NewClient(url, bearerToken string, ignoreTls bool) concourse.Client {
-	// Initialise the default client before modifying its Transport in place
-	// Panic occurs if this isn't done
-	var tracing = false
-	_, _ = http.DefaultClient.Get("http://127.0.0.1")
-
-	tr := http.DefaultTransport.(*http.Transport)
-	tr.TLSClientConfig.InsecureSkipVerify = ignoreTls
-
-	oAuthToken := &oauth2.Token{
-		AccessToken: bearerToken,
-		TokenType:   "Bearer",
-	}
-
-	transport := &oauth2.Transport{
-		Source: oauth2.StaticTokenSource(oAuthToken),
-		Base:   tr,
-	}
-
-	httpClient := &http.Client{Transport: transport}
-
-	return concourse.NewClient(url, httpClient, tracing)
-}
-
-func GetResourceVersions(client concourse.Client, teamName, pipelineName, jobName, buildName string) (map[string]atc.Version, error) {
-	team := client.Team(teamName)
-
+func GetResourceVersions(client concourse.Client, team concourse.Team, pipelineName, jobName, buildName string) (map[string]atc.Version, error) {
 	build, found, err := team.JobBuild(pipelineName, jobName, buildName)
 
 	if !found || err != nil {
@@ -93,10 +77,9 @@ func exitIfErr(err error) {
 }
 
 func printUsageAndExit(status int) {
-	usage := `** Error: arguments not found
-Usage:
-$ export ATC_BEARER_TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJj....."
-$ stopover https://ci.server.tld my-team my-pipeline my-job job-build-id`
+	usage := `Usage:
+$ fly login -t foo -c https://ci.server.tld
+$ stopover -target foo -job my-pipeline/my-job -build job-build-id`
 	fmt.Fprintln(os.Stderr, usage)
 	os.Exit(status)
 }
