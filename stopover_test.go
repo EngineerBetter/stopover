@@ -1,19 +1,20 @@
 package main_test
 
 import (
+	"github.com/concourse/fly/rc"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gbytes"
 
 	"encoding/json"
+	"io/ioutil"
+	"os"
+	"os/exec"
+
 	"github.com/SpectoLabs/hoverfly/core"
 	"github.com/SpectoLabs/hoverfly/core/handlers/v2"
 	"github.com/SpectoLabs/hoverfly/core/modes"
 	"github.com/onsi/gomega/gexec"
-	"io/ioutil"
-	"os"
-	"os/exec"
-	"regexp"
 )
 
 var _ = Describe("Stopover", func() {
@@ -22,73 +23,49 @@ var _ = Describe("Stopover", func() {
 	var binPath string
 	var session *gexec.Session
 	var args []string
-	var bearerTokenFromEnv = os.Getenv("ATC_BEARER_TOKEN")
 	var bearerTokenEnvVar string
 	var port string
 	var hfly *hoverfly.Hoverfly
-	var recording bool
 
 	BeforeSuite(func() {
 		var err error
 		binPath, err = gexec.Build("github.com/EngineerBetter/stopover")
 		Ω(err).ShouldNot(HaveOccurred())
 
-		_, recording = os.LookupEnv("ATC_BEARER_TOKEN")
-
 		config := hoverfly.InitSettings()
 		config.TLSVerification = false
 
 		hfly = hoverfly.NewHoverflyWithConfiguration(config)
 
-		if recording {
-			config.SetMode(modes.Capture)
-		} else {
-			config.SetMode(modes.Simulate)
+		config.SetMode(modes.Simulate)
 
-			bytes, err := ioutil.ReadFile(simulation_path)
-			Ω(err).ShouldNot(HaveOccurred())
+		bytes, err := ioutil.ReadFile(simulation_path)
+		Ω(err).ShouldNot(HaveOccurred())
 
-			simulation := v2.SimulationViewV4{}
-			err = json.Unmarshal(bytes, &simulation)
-			Ω(err).ShouldNot(HaveOccurred())
+		simulation := v2.SimulationViewV4{}
+		err = json.Unmarshal(bytes, &simulation)
+		Ω(err).ShouldNot(HaveOccurred())
 
-			err = hfly.PutSimulation(simulation)
-			Ω(err).ShouldNot(HaveOccurred())
-		}
+		err = hfly.PutSimulation(simulation)
+		Ω(err).ShouldNot(HaveOccurred())
 
 		err = hfly.StartProxy()
 		Ω(err).ShouldNot(HaveOccurred())
 		port = hfly.Cfg.ProxyPort
+		err = rc.SaveTarget(rc.TargetName("stopover_test"), "https://arthropods.dpsas.io", true, "cf-ops", nil, "")
+		Ω(err).ShouldNot(HaveOccurred())
 	})
 
 	AfterSuite(func() {
-		if recording {
-			simulation, err := hfly.GetSimulation()
-			Ω(err).ShouldNot(HaveOccurred())
-
-			bytes, err := json.Marshal(simulation)
-			Ω(err).ShouldNot(HaveOccurred())
-
-			err = ioutil.WriteFile(simulation_path, bytes, 0644)
-			Ω(err).ShouldNot(HaveOccurred())
-		}
+		err := rc.DeleteTarget(rc.TargetName("stopover_test"))
+		Ω(err).ShouldNot(HaveOccurred())
 
 		hfly.StopProxy()
 	})
 
-	BeforeEach(func() {
-		args = []string{}
-		if recording {
-			bearerTokenEnvVar = "ATC_BEARER_TOKEN=" + bearerTokenFromEnv
-		} else {
-			bearerTokenEnvVar = "ATC_BEARER_TOKEN=dummy-value"
-		}
-
-	})
-
 	JustBeforeEach(func() {
 		command := exec.Command(binPath, args...)
-		command.Env = append(command.Env, bearerTokenEnvVar, "HTTP_PROXY=http://localhost:"+port, "HTTPS_PROXY=https://localhost:"+port)
+		command.Env = append(os.Environ(), bearerTokenEnvVar, "HTTP_PROXY=http://localhost:"+port, "HTTPS_PROXY=https://localhost:"+port)
 		var err error
 		session, err = gexec.Start(command, GinkgoWriter, GinkgoWriter)
 		Ω(err).ShouldNot(HaveOccurred())
@@ -102,7 +79,7 @@ var _ = Describe("Stopover", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 			expected = string(expectedBytes)
 
-			args = []string{"https://arthropods.dpsas.io", "cf-ops", "ant", "opsman-apply-changes", "1"}
+			args = []string{"-target", "stopover_test", "-job", "ant/opsman-apply-changes", "-build", "1"}
 		})
 
 		It("outputs a YAML file of resource versions", func() {
@@ -111,47 +88,34 @@ var _ = Describe("Stopover", func() {
 		})
 	})
 
-	var usage = regexp.QuoteMeta(`** Error: arguments not found
-Usage:
-$ export ATC_BEARER_TOKEN="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJj....."
-$ stopover https://ci.server.tld my-team my-pipeline my-job job-build-id`)
-
 	Context("when no arguments are provided", func() {
+		BeforeEach(func() {
+			args = nil
+		})
 		It("exits 1 and prints usage", func() {
 			Eventually(session).Should(gexec.Exit(1))
-			Ω(session.Err).Should(Say(usage))
+			Ω(session.Err).Should(Say("Usage"))
 		})
 	})
 
-	Context("when the envvar ATC_BEARER_TOKEN is not set", func() {
+	Context("when the target is not present", func() {
 		BeforeEach(func() {
-			bearerTokenEnvVar = ""
+			args = []string{"-target", "stopover_test_not_present", "-job", "ant/opsman-apply-changes", "-build", "1"}
 		})
 
 		It("exits 1 and prints usage", func() {
 			Eventually(session).Should(gexec.Exit(1))
-			Ω(session.Err).Should(Say(usage))
+			Ω(session.Err).Should(Say("unknown target"))
 		})
 	})
 
 	Context("when an argument is missing", func() {
 		BeforeEach(func() {
-			args = []string{"https://arthropods.dpsas.io", "pipeline", "job", "1"}
+			args = []string{"-target", "stopover_test_not_present", "-job", "ant/opsman-apply-changes"}
 		})
 
 		It("exits 1", func() {
 			Eventually(session).Should(gexec.Exit(1))
-		})
-	})
-
-	Context("when the URL is invalid", func() {
-		BeforeEach(func() {
-			args = []string{"not-valid-url", "team", "pipeline", "job", "1"}
-		})
-
-		It("exits 1 with a useful error message", func() {
-			Eventually(session).Should(gexec.Exit(1))
-			Ω(session.Err).Should(Say("could not get build for job"))
 		})
 	})
 })

@@ -4,22 +4,22 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"io/ioutil"
+
 	"github.com/concourse/atc"
-	"github.com/concourse/go-concourse/concourse"
 	"github.com/concourse/go-concourse/concourse/concoursefakes"
 	"gopkg.in/yaml.v2"
-	"io/ioutil"
 )
 
 var _ = Describe("GetResourceVersions", func() {
 
-	var teamName = "cf-ops"
 	var pipelineName = "ant"
 	var jobName = "opsman-apply-changes"
 	var buildName = "1"
 
 	var expectedStruct map[string]atc.Version
 	var client *concoursefakes.FakeClient
+	var team, wrongTeam *concoursefakes.FakeTeam
 
 	BeforeEach(func() {
 		expectedStruct = map[string]atc.Version{}
@@ -29,8 +29,8 @@ var _ = Describe("GetResourceVersions", func() {
 		err = yaml.Unmarshal(expectedBytes, expectedStruct)
 		Ω(err).ShouldNot(HaveOccurred())
 
-		fakeTeam := new(concoursefakes.FakeTeam)
-		fakeTeam.JobBuildStub = func(pipeline, job, build string) (atc.Build, bool, error) {
+		team = new(concoursefakes.FakeTeam)
+		team.JobBuildStub = func(pipeline, job, build string) (atc.Build, bool, error) {
 			if pipeline == "ant" && job == "opsman-apply-changes" && build == "1" {
 				return atc.Build{ID: 2098}, true, nil
 			}
@@ -38,19 +38,12 @@ var _ = Describe("GetResourceVersions", func() {
 			return atc.Build{}, false, nil
 		}
 
-		wrongTeam := new(concoursefakes.FakeTeam)
+		wrongTeam = new(concoursefakes.FakeTeam)
 		wrongTeam.JobBuildStub = func(pipeline, job, build string) (atc.Build, bool, error) {
 			return atc.Build{}, false, nil
 		}
 
 		client = new(concoursefakes.FakeClient)
-		client.TeamStub = func(teamName string) concourse.Team {
-			if teamName == "cf-ops" {
-				return fakeTeam
-			}
-
-			return wrongTeam
-		}
 
 		client.BuildResourcesStub = func(buildID int) (atc.BuildInputsOutputs, bool, error) {
 			if buildID == 2098 {
@@ -83,14 +76,14 @@ var _ = Describe("GetResourceVersions", func() {
 	})
 
 	It("returns the expected stuff", func() {
-		resourceVersions, err := GetResourceVersions(client, teamName, pipelineName, jobName, buildName)
+		resourceVersions, err := GetResourceVersions(client, team, pipelineName, jobName, buildName)
 		Ω(err).ShouldNot(HaveOccurred())
 		Ω(resourceVersions).Should(Equal(expectedStruct))
 	})
 
 	Context("when the team does not exist", func() {
 		It("returns an error", func() {
-			resourceVersions, err := GetResourceVersions(client, "does-not-exist", pipelineName, jobName, buildName)
+			resourceVersions, err := GetResourceVersions(client, wrongTeam, pipelineName, jobName, buildName)
 			Ω(err).Should(HaveOccurred())
 			Ω(resourceVersions).Should(BeNil())
 		})
@@ -98,7 +91,7 @@ var _ = Describe("GetResourceVersions", func() {
 
 	Context("when the pipeline does not exist", func() {
 		It("returns an error", func() {
-			resourceVersions, err := GetResourceVersions(client, teamName, "does-not-exist", jobName, buildName)
+			resourceVersions, err := GetResourceVersions(client, team, "does-not-exist", jobName, buildName)
 			Ω(err).Should(HaveOccurred())
 			Ω(resourceVersions).Should(BeNil())
 		})
@@ -106,7 +99,7 @@ var _ = Describe("GetResourceVersions", func() {
 
 	Context("when the job does not exist", func() {
 		It("returns an error", func() {
-			resourceVersions, err := GetResourceVersions(client, teamName, pipelineName, "does-not-exist", buildName)
+			resourceVersions, err := GetResourceVersions(client, team, pipelineName, "does-not-exist", buildName)
 			Ω(err).Should(HaveOccurred())
 			Ω(resourceVersions).Should(BeNil())
 		})
@@ -114,7 +107,7 @@ var _ = Describe("GetResourceVersions", func() {
 
 	Context("when the build does not exist", func() {
 		It("returns an error", func() {
-			resourceVersions, err := GetResourceVersions(client, teamName, pipelineName, jobName, "does-not-exist")
+			resourceVersions, err := GetResourceVersions(client, team, pipelineName, jobName, "does-not-exist")
 			Ω(err).Should(HaveOccurred())
 			Ω(resourceVersions).Should(BeNil())
 		})

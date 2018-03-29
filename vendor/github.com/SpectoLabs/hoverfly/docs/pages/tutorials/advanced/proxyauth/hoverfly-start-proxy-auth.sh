@@ -1,0 +1,1 @@
+hoverctl start --auth
