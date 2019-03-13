@@ -4,11 +4,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/concourse/atc"
-	"github.com/concourse/go-concourse/concourse"
-	"github.com/concourse/go-concourse/concourse/concoursefakes"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
+
+	"github.com/concourse/concourse/atc"
+	"github.com/concourse/concourse/go-concourse/concourse"
+	"github.com/concourse/concourse/go-concourse/concourse/concoursefakes"
+	"gopkg.in/yaml.v2"
 )
 
 var _ = Describe("GetResourceVersions", func() {
@@ -57,19 +58,19 @@ var _ = Describe("GetResourceVersions", func() {
 				return atc.BuildInputsOutputs{
 					Inputs: []atc.PublicBuildInput{
 						{
-							Resource: "config-repo",
+							Name: "config-repo",
 							Version: atc.Version{
 								"ref": "14a1260f1fe39088fcde02fedb8de30da435dd61",
 							},
 						},
 						{
-							Resource: "ert-config",
+							Name: "ert-config",
 							Version: atc.Version{
 								"ref": "d3fa445682b68c6869fa9866ef69b31de0ec25ce",
 							},
 						},
 						{
-							Resource: "om-cli",
+							Name: "om-cli",
 							Version: atc.Version{
 								"version_id": "Q.6uemV1Y5FPnTo5sAQbwHINdMPnEoaP",
 							},

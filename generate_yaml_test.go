@@ -5,7 +5,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/concourse/atc"
+	"github.com/concourse/concourse/atc"
 	"gopkg.in/yaml.v2"
 )
 

@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/concourse/atc"
-	"github.com/concourse/go-concourse/concourse"
-	"github.com/pkg/errors"
-	"golang.org/x/oauth2"
-	"gopkg.in/yaml.v2"
 	"net/http"
 	"os"
 	"strconv"
+
+	"github.com/concourse/concourse/atc"
+	"github.com/concourse/concourse/go-concourse/concourse"
+	"github.com/pkg/errors"
+	"golang.org/x/oauth2"
+	"gopkg.in/yaml.v2"
 )
 
 func main() {
@@ -74,7 +75,7 @@ func GetResourceVersions(client concourse.Client, teamName, pipelineName, jobNam
 
 	resourceVersions := make(map[string]atc.Version)
 	for _, input := range buildInputsOutputs.Inputs {
-		key := "resource_version_" + input.Resource
+		key := "resource_version_" + input.Name
 		resourceVersions[key] = input.Version
 	}
 
