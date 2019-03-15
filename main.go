@@ -62,8 +62,12 @@ func GetResourceVersions(client concourse.Client, teamName, pipelineName, jobNam
 
 	build, found, err := team.JobBuild(pipelineName, jobName, buildName)
 
-	if !found || err != nil {
-		return nil, errors.New("could not get build for job")
+	if err != nil {
+		return nil, fmt.Errorf("error getting build for job [%v]", err)
+	}
+
+	if !found {
+		return nil, errors.New("did not find build for job")
 	}
 
 	globalID := build.ID
