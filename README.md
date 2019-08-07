@@ -5,6 +5,9 @@ Concourse build.
 
 ## Usage
 
+* For Concourse >= v5, use Stopver tag `2.0.0`
+* For Concourse <= v4, use Stopver tag `1.1.0`
+
 ```
 $ export ATC_BEARER_TOKEN=foo
 $ stopover https://ci.domain.com team-name pipeline job build-number
