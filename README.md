@@ -13,6 +13,13 @@ $ export ATC_BEARER_TOKEN=foo
 $ stopover https://ci.domain.com team-name pipeline job build-number
 ```
 
+## Using Stopover for Promotion
+
+These blog posts discuss how Stopover is used at EngineerBetter:
+
+* [Properly Promoting Pipelines](https://www.engineerbetter.com/blog/pipeline-promotion/)
+* [Continuous Infrastructure on Google Cloud](https://www.engineerbetter.com/blog/continuous-infrastructure-google-cloud/)
+
 ## Resource Versions File
 
 `stopover` outputs a file of the following format:
