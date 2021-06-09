@@ -4,18 +4,19 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/concourse/atc"
-	"github.com/concourse/go-concourse/concourse"
-	"github.com/concourse/go-concourse/concourse/concoursefakes"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
+
+	"github.com/concourse/concourse/atc"
+	"github.com/concourse/concourse/go-concourse/concourse"
+	"github.com/concourse/concourse/go-concourse/concourse/concoursefakes"
+	yaml "gopkg.in/yaml.v2"
 )
 
 var _ = Describe("GetResourceVersions", func() {
 
-	var teamName = "cf-ops"
-	var pipelineName = "ant"
-	var jobName = "opsman-apply-changes"
+	var teamName = "main"
+	var pipelineName = "control-tower"
+	var jobName = "minor"
 	var buildName = "1"
 
 	var expectedStruct map[string]atc.Version
@@ -31,7 +32,7 @@ var _ = Describe("GetResourceVersions", func() {
 
 		fakeTeam := new(concoursefakes.FakeTeam)
 		fakeTeam.JobBuildStub = func(pipeline, job, build string) (atc.Build, bool, error) {
-			if pipeline == "ant" && job == "opsman-apply-changes" && build == "1" {
+			if pipeline == "control-tower" && job == "minor" && build == "1" {
 				return atc.Build{ID: 2098}, true, nil
 			}
 
@@ -45,7 +46,7 @@ var _ = Describe("GetResourceVersions", func() {
 
 		client = new(concoursefakes.FakeClient)
 		client.TeamStub = func(teamName string) concourse.Team {
-			if teamName == "cf-ops" {
+			if teamName == "main" {
 				return fakeTeam
 			}
 
@@ -57,21 +58,28 @@ var _ = Describe("GetResourceVersions", func() {
 				return atc.BuildInputsOutputs{
 					Inputs: []atc.PublicBuildInput{
 						{
-							Resource: "config-repo",
+							Name: "control-tower-ops",
 							Version: atc.Version{
-								"ref": "14a1260f1fe39088fcde02fedb8de30da435dd61",
+								"commit": "407f8ab92a7258cbae32d1ad987b64f8d18a9a3a",
+								"ref":    "0.0.8",
 							},
 						},
 						{
-							Resource: "ert-config",
+							Name: "pcf-ops",
 							Version: atc.Version{
-								"ref": "d3fa445682b68c6869fa9866ef69b31de0ec25ce",
+								"digest": "sha256:8a4f9f1647080c224f015cc655146fda7329baa8c7b279b597dee114a69ff97a",
 							},
 						},
 						{
-							Resource: "om-cli",
+							Name: "version",
 							Version: atc.Version{
-								"version_id": "Q.6uemV1Y5FPnTo5sAQbwHINdMPnEoaP",
+								"number": "0.2.0",
+							},
+						},
+						{
+							Name: "control-tower",
+							Version: atc.Version{
+								"ref": "244a2df8b612d8e9b560ba73023d7673b5d4d007",
 							},
 						},
 					},

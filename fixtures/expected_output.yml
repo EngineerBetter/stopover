@@ -1,6 +1,9 @@
-resource_version_config-repo:
-  ref: 14a1260f1fe39088fcde02fedb8de30da435dd61
-resource_version_ert-config:
-  ref: d3fa445682b68c6869fa9866ef69b31de0ec25ce
-resource_version_om-cli:
-  version_id: Q.6uemV1Y5FPnTo5sAQbwHINdMPnEoaP
+resource_version_control-tower:
+  ref: 244a2df8b612d8e9b560ba73023d7673b5d4d007
+resource_version_control-tower-ops:
+  commit: 407f8ab92a7258cbae32d1ad987b64f8d18a9a3a
+  ref: 0.0.8
+resource_version_pcf-ops:
+  digest: sha256:8a4f9f1647080c224f015cc655146fda7329baa8c7b279b597dee114a69ff97a
+resource_version_version:
+  number: 0.2.0

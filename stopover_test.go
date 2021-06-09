@@ -6,14 +6,15 @@ import (
 	. "github.com/onsi/gomega/gbytes"
 
 	"encoding/json"
-	"github.com/SpectoLabs/hoverfly/core"
-	"github.com/SpectoLabs/hoverfly/core/handlers/v2"
-	"github.com/SpectoLabs/hoverfly/core/modes"
-	"github.com/onsi/gomega/gexec"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
+
+	hoverfly "github.com/SpectoLabs/hoverfly/core"
+	v2 "github.com/SpectoLabs/hoverfly/core/handlers/v2"
+	"github.com/SpectoLabs/hoverfly/core/modes"
+	"github.com/onsi/gomega/gexec"
 )
 
 var _ = Describe("Stopover", func() {
@@ -88,7 +89,7 @@ var _ = Describe("Stopover", func() {
 
 	JustBeforeEach(func() {
 		command := exec.Command(binPath, args...)
-		command.Env = append(command.Env, bearerTokenEnvVar, "HTTP_PROXY=http://localhost:"+port, "HTTPS_PROXY=https://localhost:"+port)
+		command.Env = append(command.Env, bearerTokenEnvVar, "HTTP_PROXY=http://localhost:"+port, "HTTPS_PROXY=http://localhost:"+port)
 		var err error
 		session, err = gexec.Start(command, GinkgoWriter, GinkgoWriter)
 		Ω(err).ShouldNot(HaveOccurred())
@@ -102,12 +103,12 @@ var _ = Describe("Stopover", func() {
 			Ω(err).ShouldNot(HaveOccurred())
 			expected = string(expectedBytes)
 
-			args = []string{"https://arthropods.dpsas.io", "cf-ops", "ant", "opsman-apply-changes", "1"}
+			args = []string{"https://ci.engineerbetter.com", "main", "control-tower", "minor", "1"}
 		})
 
 		It("outputs a YAML file of resource versions", func() {
-			Eventually(session).Should(gexec.Exit(0))
-			Ω(session).Should(Say(expected))
+			Eventually(session).Should(Say(expected))
+			Ω(session).Should(gexec.Exit(0))
 		})
 	})
 
@@ -151,7 +152,7 @@ $ stopover https://ci.server.tld my-team my-pipeline my-job job-build-id`)
 
 		It("exits 1 with a useful error message", func() {
 			Eventually(session).Should(gexec.Exit(1))
-			Ω(session.Err).Should(Say("could not get build for job"))
+			Ω(session.Err).Should(Say("error getting build for job \\[Get not-valid-url/api/v1/teams/team/pipelines/pipeline/jobs/job/builds/1: unsupported protocol scheme \"\"\\]"))
 		})
 	})
 })
