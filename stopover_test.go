@@ -49,11 +49,12 @@ var _ = Describe("Stopover", func() {
 			bytes, err := ioutil.ReadFile(simulation_path)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			simulation := v2.SimulationViewV4{}
+			simulation := v2.SimulationViewV5{}
 			err = json.Unmarshal(bytes, &simulation)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = hfly.PutSimulation(simulation)
+			result := hfly.PutSimulation(simulation)
+			err = result.GetError()
 			Ω(err).ShouldNot(HaveOccurred())
 		}
 

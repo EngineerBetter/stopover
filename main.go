@@ -59,8 +59,11 @@ func NewClient(url, bearerToken string, ignoreTls bool) concourse.Client {
 
 func GetResourceVersions(client concourse.Client, teamName, pipelineName, jobName, buildName string) (map[string]atc.Version, error) {
 	team := client.Team(teamName)
+	pipelineRef := atc.PipelineRef{
+		Name: pipelineName,
+	}
 
-	build, found, err := team.JobBuild(pipelineName, jobName, buildName)
+	build, found, err := team.JobBuild(pipelineRef, jobName, buildName)
 
 	if err != nil {
 		return nil, fmt.Errorf("error getting build for job [%v]", err)
