@@ -3,13 +3,13 @@ package modes
 import (
 	"net/http"
 
+	"github.com/SpectoLabs/hoverfly/core/errors"
 	"github.com/SpectoLabs/hoverfly/core/handlers/v2"
-	"github.com/SpectoLabs/hoverfly/core/matching"
 	"github.com/SpectoLabs/hoverfly/core/models"
 )
 
 type HoverflySimulate interface {
-	GetResponse(models.RequestDetails) (*models.ResponseDetails, *matching.MatchingError)
+	GetResponse(models.RequestDetails) (*models.ResponseDetails, *errors.HoverflyError)
 	ApplyMiddleware(models.RequestResponsePair) (models.RequestResponsePair, error)
 }
 
@@ -36,7 +36,7 @@ func (this *SimulateMode) SetArguments(arguments ModeArguments) {
 }
 
 //TODO: We should only need one of these two parameters
-func (this SimulateMode) Process(request *http.Request, details models.RequestDetails) (*http.Response, error) {
+func (this SimulateMode) Process(request *http.Request, details models.RequestDetails) (ProcessResult, error) {
 	pair := models.RequestResponsePair{
 		Request: details,
 	}
@@ -49,9 +49,14 @@ func (this SimulateMode) Process(request *http.Request, details models.RequestDe
 
 	pair.Response = *response
 
-	if pair, err := this.Hoverfly.ApplyMiddleware(pair); err == nil {
-		return ReconstructResponse(request, pair), nil
-	} else {
+	pair, err := this.Hoverfly.ApplyMiddleware(pair)
+	if err != nil {
 		return ReturnErrorAndLog(request, err, &pair, "There was an error when executing middleware", Simulate)
 	}
+
+	return newProcessResult(
+		ReconstructResponse(request, pair),
+		pair.Response.FixedDelay,
+		pair.Response.LogNormalDelay,
+	), nil
 }

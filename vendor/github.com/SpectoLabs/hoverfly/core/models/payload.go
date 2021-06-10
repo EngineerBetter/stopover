@@ -12,10 +12,10 @@ import (
 	"sort"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/SpectoLabs/hoverfly/core/handlers/v2"
 	"github.com/SpectoLabs/hoverfly/core/interfaces"
 	"github.com/SpectoLabs/hoverfly/core/util"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -62,6 +62,7 @@ type RequestDetails struct {
 	Query       map[string][]string
 	Body        string
 	Headers     map[string][]string
+	rawQuery    string
 }
 
 func NewRequestDetailsFromHttpRequest(req *http.Request) (RequestDetails, error) {
@@ -79,15 +80,37 @@ func NewRequestDetailsFromHttpRequest(req *http.Request) (RequestDetails, error)
 		return RequestDetails{}, err
 	}
 
+	// Request not always have RawPath, but we want to use it if exists for perservind encoding
+	var urlPath = req.URL.RawPath
+	if urlPath == "" {
+		urlPath = req.URL.Path
+	}
+
+	// Proxy tunnel request gives relative URL, and we should manually set scheme to HTTP
+	var scheme string
+	if req.URL.IsAbs() {
+		scheme = req.URL.Scheme
+	} else {
+		scheme = "http"
+	}
 	requestDetails := RequestDetails{
-		Path:        req.URL.Path,
+		Path:        urlPath,
 		Method:      req.Method,
 		Destination: strings.ToLower(req.Host),
-		Scheme:      req.URL.Scheme,
+		Scheme:      scheme,
 		Query:       req.URL.Query(),
-		Body:        string(reqBody),
-		Headers:     req.Header,
+		Body:        reqBody,
+		Headers:     req.Header.Clone(),
+		rawQuery:    req.URL.RawQuery,
 	}
+
+	for key, value := range requestDetails.Query {
+		if strings.HasPrefix(key, "./") {
+			requestDetails.Query[key[2:]] = value
+			delete(requestDetails.Query, key)
+		}
+	}
+
 	return requestDetails, nil
 }
 
@@ -100,6 +123,7 @@ func (this *RequestDetails) ConvertToRequestDetailsView() v2.RequestDetailsView 
 		Destination: &this.Destination,
 		Scheme:      &this.Scheme,
 		Query:       &queryString,
+		QueryMap:    this.Query,
 		Body:        &this.Body,
 		Headers:     this.Headers,
 	}
@@ -159,14 +183,26 @@ func (r *RequestDetails) HashWithoutHost() string {
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
+type ResponseDetailsLogNormal struct {
+	Min    int
+	Max    int
+	Mean   int
+	Median int
+}
+
 // ResponseDetails structure hold response body from external service, body is not decoded and is supposed
 // to be bytes, however headers should provide all required information for later decoding
 // by the client.
 type ResponseDetails struct {
-	Status    int
-	Body      string
-	Headers   map[string][]string
-	Templated bool
+	Status           int
+	Body             string
+	BodyFile         string
+	Headers          map[string][]string
+	Templated        bool
+	TransitionsState map[string]string
+	RemovesState     []string
+	FixedDelay       int
+	LogNormalDelay   *ResponseDetailsLogNormal
 }
 
 func NewResponseDetailsFromResponse(data interfaces.Response) ResponseDetails {
@@ -177,10 +213,30 @@ func NewResponseDetailsFromResponse(data interfaces.Response) ResponseDetails {
 		body = string(decoded)
 	}
 
-	return ResponseDetails{Status: data.GetStatus(), Body: body, Headers: data.GetHeaders(), Templated: data.GetTemplated()}
+	details := ResponseDetails{
+		Status:           data.GetStatus(),
+		Body:             body,
+		BodyFile:         data.GetBodyFile(),
+		Headers:          data.GetHeaders(),
+		Templated:        data.GetTemplated(),
+		TransitionsState: data.GetTransitionsState(),
+		RemovesState:     data.GetRemovesState(),
+		FixedDelay:       data.GetFixedDelay(),
+	}
+
+	if d := data.GetLogNormalDelay(); d != nil {
+		details.LogNormalDelay = &ResponseDetailsLogNormal{
+			Min:    d.GetMin(),
+			Max:    d.GetMax(),
+			Mean:   d.GetMean(),
+			Median: d.GetMedian(),
+		}
+	}
+
+	return details
 }
 
-// This function will create a JSON appriopriate version of ResponseDetails for the v2 API
+// This function will create a JSON appropriate version of ResponseDetails for the v2 API
 // If the response headers indicate that the content is encoded, or it has a non-matching
 // supported mimetype, we base64 encode it.
 func (r *ResponseDetails) ConvertToResponseDetailsView() v2.ResponseDetailsView {
@@ -215,7 +271,7 @@ func (r *ResponseDetails) ConvertToResponseDetailsView() v2.ResponseDetailsView 
 	}
 }
 
-func (r *ResponseDetails) ConvertToResponseDetailsViewV3() v2.ResponseDetailsViewV3 {
+func (r *ResponseDetails) ConvertToResponseDetailsViewV5() v2.ResponseDetailsViewV5 {
 	needsEncoding := false
 
 	// Check headers for gzip
@@ -239,11 +295,30 @@ func (r *ResponseDetails) ConvertToResponseDetailsViewV3() v2.ResponseDetailsVie
 		body = base64.StdEncoding.EncodeToString([]byte(r.Body))
 	}
 
-	return v2.ResponseDetailsViewV3{
-		Status:      r.Status,
-		Body:        body,
-		Headers:     r.Headers,
-		EncodedBody: needsEncoding,
-		Templated:   r.Templated,
+	view := v2.ResponseDetailsViewV5{
+		Status:           r.Status,
+		Body:             body,
+		BodyFile:         r.BodyFile,
+		Headers:          r.Headers,
+		EncodedBody:      needsEncoding,
+		Templated:        r.Templated,
+		RemovesState:     r.RemovesState,
+		TransitionsState: r.TransitionsState,
+		FixedDelay:       r.FixedDelay,
 	}
+
+	if r.LogNormalDelay != nil {
+		view.LogNormalDelay = &v2.LogNormalDelayOptions{
+			Min:    r.LogNormalDelay.Min,
+			Max:    r.LogNormalDelay.Max,
+			Mean:   r.LogNormalDelay.Mean,
+			Median: r.LogNormalDelay.Median,
+		}
+	}
+
+	return view
+}
+
+func (this RequestDetails) GetRawQuery() string {
+	return this.rawQuery
 }

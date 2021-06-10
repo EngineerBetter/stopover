@@ -3,74 +3,47 @@ package matching
 import (
 	"strings"
 
-	glob "github.com/ryanuber/go-glob"
+	"github.com/SpectoLabs/hoverfly/core/models"
 )
 
-func CountlessHeaderMatcher(requestMatcherHeaders, toMatch map[string][]string) * FieldMatch {
+func HeaderMatching(requestMatcher models.RequestMatcher, toMatch map[string][]string) *FieldMatch {
 
-	for matcherHeaderKey, matcherHeaderValues := range requestMatcherHeaders {
-
-		// Make everything lowercase, as headers are case insensitive
-		for requestHeaderKey, requestHeaderValues := range toMatch {
-			delete(toMatch, requestHeaderKey)
-			toMatch[strings.ToLower(requestHeaderKey)] = requestHeaderValues
-		}
-
-		toMatchHeaderValues, toMatchHeaderValuesFound := toMatch[strings.ToLower(matcherHeaderKey)]
-		if !toMatchHeaderValuesFound {
-			return FieldMatchWithNoScore(false)
-		}
-
-		for _, matcherHeaderValue := range matcherHeaderValues {
-			matcherHeaderValueMatched := false
-			for _, toMatchHeaderValue := range toMatchHeaderValues {
-				if glob.Glob(strings.ToLower(matcherHeaderValue), strings.ToLower(toMatchHeaderValue)) {
-					matcherHeaderValueMatched = true
-				}
-			}
-
-			if !matcherHeaderValueMatched {
-				return FieldMatchWithNoScore(false)
-			}
-		}
-	}
-	return FieldMatchWithNoScore(true)
-}
-
-func CountingHeaderMatcher(requestMatcherHeaders, toMatch map[string][]string) * FieldMatch {
+	// // Make everything lowercase, as headers are case insensitive
+	// for requestHeaderKey, requestHeaderValues := range toMatch {
+	// 	delete(toMatch, requestHeaderKey)
+	// 	toMatch[strings.ToLower(requestHeaderKey)] = requestHeaderValues
+	// }
 
 	matched := true
-	var matchScore int
+	var score int
 
-	for matcherHeaderKey, matcherHeaderValues := range requestMatcherHeaders {
+	requestMatcherHeadersWithMatchers := requestMatcher.Headers
 
+	for matcherHeaderKey, matcherHeaderValue := range requestMatcherHeadersWithMatchers {
 		// Make everything lowercase, as headers are case insensitive
-		for requestHeaderKey, requestHeaderValues := range toMatch {
-			delete(toMatch, requestHeaderKey)
-			toMatch[strings.ToLower(requestHeaderKey)] = requestHeaderValues
+		toMatchWithLowerCaseKeys := make(map[string][]string)
+		for key, value := range toMatch {
+			toMatchWithLowerCaseKeys[strings.ToLower(key)] = value
 		}
+		matcherHeaderValueMatched := false
 
-		toMatchHeaderValues, found := toMatch[strings.ToLower(matcherHeaderKey)]
+		toMatchHeaderValues, found := toMatchWithLowerCaseKeys[strings.ToLower(matcherHeaderKey)]
 		if !found {
 			matched = false
+			continue
 		}
 
-		for _, matcherHeaderValue := range matcherHeaderValues {
-			matcherHeaderValueMatched := false
-			for _, toMatchHeaderValue := range toMatchHeaderValues {
-				if glob.Glob(strings.ToLower(matcherHeaderValue), strings.ToLower(toMatchHeaderValue)) {
-					matcherHeaderValueMatched = true
-					matchScore++
-				}
-			}
+		fieldMatch := FieldMatcher(matcherHeaderValue, strings.Join(toMatchHeaderValues, ";"))
+		matcherHeaderValueMatched = fieldMatch.Matched
+		score += fieldMatch.Score
 
-			if !matcherHeaderValueMatched {
-				matched = false
-			}
+		if !matcherHeaderValueMatched {
+			matched = false
 		}
 	}
+
 	return &FieldMatch{
-		Matched:    matched,
-		MatchScore: matchScore,
+		Matched: matched,
+		Score:   score,
 	}
 }

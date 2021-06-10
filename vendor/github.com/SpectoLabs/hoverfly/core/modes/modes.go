@@ -3,17 +3,16 @@ package modes
 import (
 	"bytes"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 
-	log "github.com/Sirupsen/logrus"
-
-	"github.com/Sirupsen/logrus"
 	"github.com/SpectoLabs/goproxy"
 	"github.com/SpectoLabs/hoverfly/core/handlers/v2"
-	"github.com/SpectoLabs/hoverfly/core/matching"
 	"github.com/SpectoLabs/hoverfly/core/models"
+	"github.com/sirupsen/logrus"
 )
 
 // SimulateMode - default mode when Hoverfly looks for captured requests to respond
@@ -28,23 +27,37 @@ const Modify = "modify"
 // CaptureMode - requests are captured and stored in cache
 const Capture = "capture"
 
+// SpyMode - simulateMode but will call real service when cache miss
+const Spy = "spy"
+
+// DiffMode - calls real service and compares response with simulation
+const Diff = "diff"
+
 type Mode interface {
-	Process(*http.Request, models.RequestDetails) (*http.Response, error)
+	Process(*http.Request, models.RequestDetails) (ProcessResult, error)
 	SetArguments(arguments ModeArguments)
 	View() v2.ModeView
 }
 
-type Hoverfly interface {
-	GetResponse(models.RequestDetails) (*models.ResponseDetails, *matching.MatchingError)
-	ApplyMiddleware(models.RequestResponsePair) (models.RequestResponsePair, error)
-	DoRequest(*http.Request) (*http.Response, error)
-	IsMiddlewareSet() bool
-	Save(*models.RequestDetails, *models.ResponseDetails)
+type ModeArguments struct {
+	Headers            []string
+	MatchingStrategy   *string
+	Stateful           bool
+	OverwriteDuplicate bool
 }
 
-type ModeArguments struct {
-	Headers          []string
-	MatchingStrategy *string
+type ProcessResult struct {
+	Response       *http.Response
+	FixedDelay     int
+	LogNormalDelay *models.ResponseDetailsLogNormal
+}
+
+func (p ProcessResult) IsResponseDelayable() bool {
+	return p.FixedDelay > 0 || p.LogNormalDelay != nil
+}
+
+func newProcessResult(response *http.Response, fixedDelay int, logNormalDelay *models.ResponseDetailsLogNormal) ProcessResult {
+	return ProcessResult{Response: response, FixedDelay: fixedDelay, LogNormalDelay: logNormalDelay}
 }
 
 // ReconstructRequest replaces original request with details provided in Constructor Payload.RequestMatcher
@@ -55,7 +68,7 @@ func ReconstructRequest(pair models.RequestResponsePair) (*http.Request, error) 
 
 	newRequest, err := http.NewRequest(
 		pair.Request.Method,
-		fmt.Sprintf("%s://%s", pair.Request.Scheme, pair.Request.Destination),
+		fmt.Sprintf("%s://%s%s", pair.Request.Scheme, pair.Request.Destination, pair.Request.Path),
 		bytes.NewBuffer([]byte(pair.Request.Body)))
 
 	if err != nil {
@@ -63,11 +76,16 @@ func ReconstructRequest(pair models.RequestResponsePair) (*http.Request, error) 
 	}
 
 	newRequest.Method = pair.Request.Method
-	newRequest.URL.Path = pair.Request.Path
-
-	t := &url.URL{Path: pair.Request.QueryString()}
-	newRequest.URL.RawQuery = t.String()
 	newRequest.Header = pair.Request.Headers
+
+	if pair.Request.GetRawQuery() == "" {
+		// rawQuery is empty if middleware is applied, as unexported fields are not marshal, hence re-encoding of the query params is needed here
+		t := &url.URL{Path: pair.Request.QueryString()}
+		newRequest.URL.RawQuery = t.String()
+	} else {
+		// otherwise we use the original raw query for pass-through
+		newRequest.URL.RawQuery = pair.Request.GetRawQuery()
+	}
 
 	return newRequest, nil
 }
@@ -77,19 +95,32 @@ func ReconstructResponse(request *http.Request, pair models.RequestResponsePair)
 	response := &http.Response{}
 	response.Request = request
 
-	// adding body, length, status code
-	buf := bytes.NewBufferString(pair.Response.Body)
-	response.ContentLength = int64(buf.Len())
-	response.Body = ioutil.NopCloser(buf)
+	response.ContentLength = int64(len(pair.Response.Body))
+	response.Body = ioutil.NopCloser(strings.NewReader(pair.Response.Body))
 	response.StatusCode = pair.Response.Status
+	response.Status = http.StatusText(pair.Response.Status)
 
 	headers := make(http.Header)
 
+	// Make copy to prevent modifying the simulation
 	for k, v := range pair.Response.Headers {
 		headers[k] = v
 	}
 
+	if keys, present := headers["Trailer"]; present {
+		response.Trailer = make(http.Header)
+		for _, key := range keys {
+			response.Trailer[key] = headers[key]
+			delete(headers, key)
+		}
+		delete(headers, "Trailer")
+	}
+
 	response.Header = headers
+
+	if response.ContentLength > 0 && response.Header.Get("Content-Length") == "" && response.Header.Get("Transfer-Encoding") == "" {
+		response.Header.Set("Content-Length", fmt.Sprintf("%v", response.ContentLength))
+	}
 
 	return response
 }
@@ -126,7 +157,7 @@ func GetResponseLogFields(response *models.ResponseDetails) *logrus.Fields {
 	}
 }
 
-func ReturnErrorAndLog(request *http.Request, err error, pair *models.RequestResponsePair, msg, mode string) (*http.Response, error) {
+func ReturnErrorAndLog(request *http.Request, err error, pair *models.RequestResponsePair, msg, mode string) (ProcessResult, error) {
 	log.WithFields(log.Fields{
 		"error":    err.Error(),
 		"mode":     mode,
@@ -137,8 +168,8 @@ func ReturnErrorAndLog(request *http.Request, err error, pair *models.RequestRes
 	return ErrorResponse(request, err, msg), err
 }
 
-func ErrorResponse(req *http.Request, err error, msg string) *http.Response {
-	return goproxy.NewResponse(req,
+func ErrorResponse(req *http.Request, err error, msg string) ProcessResult {
+	return newProcessResult(goproxy.NewResponse(req,
 		goproxy.ContentTypeText, http.StatusBadGateway,
-		fmt.Sprintf("Hoverfly Error!\n\n%s\n\nGot error: %s", msg, err.Error()))
+		fmt.Sprintf("Hoverfly Error!\n\n%s\n\nGot error: %s", msg, err.Error())), 0, nil)
 }

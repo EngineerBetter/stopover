@@ -10,46 +10,43 @@ import (
 	"github.com/tedsuo/rata"
 )
 
-func (team *team) CheckResourceType(pipelineName string, resourceTypeName string, version atc.Version) (bool, error) {
+func (team *team) CheckResourceType(pipelineRef atc.PipelineRef, resourceTypeName string, version atc.Version) (atc.Build, bool, error) {
+
 	params := rata.Params{
-		"pipeline_name":      pipelineName,
+		"pipeline_name":      pipelineRef.Name,
 		"resource_type_name": resourceTypeName,
-		"team_name":          team.name,
+		"team_name":          team.Name(),
 	}
+
+	var build atc.Build
 
 	jsonBytes, err := json.Marshal(atc.CheckRequestBody{From: version})
 	if err != nil {
-		return false, err
+		return build, false, err
 	}
 
-	response := internal.Response{}
 	err = team.connection.Send(internal.Request{
-		ReturnResponseBody: true,
-		RequestName:        atc.CheckResourceType,
-		Params:             params,
-		Body:               bytes.NewBuffer(jsonBytes),
-		Header:             http.Header{"Content-Type": []string{"application/json"}},
-	}, &response)
+		RequestName: atc.CheckResourceType,
+		Params:      params,
+		Query:       pipelineRef.QueryParams(),
+		Body:        bytes.NewBuffer(jsonBytes),
+		Header:      http.Header{"Content-Type": []string{"application/json"}},
+	}, &internal.Response{
+		Result: &build,
+	})
 
-	switch err.(type) {
+	switch e := err.(type) {
 	case nil:
-		return true, nil
+		return build, true, nil
 	case internal.ResourceNotFoundError:
-		return false, nil
-	default:
-		if unexpectedResponseError, ok := err.(internal.UnexpectedResponseError); ok {
-			if unexpectedResponseError.StatusCode == http.StatusInternalServerError {
-				checkResourceErr := CheckResourceError{
-					atc.CheckResponseBody{
-						Stderr:     unexpectedResponseError.Body,
-						ExitStatus: 70,
-					},
-				}
-
-				return false, checkResourceErr
-			}
+		return build, false, nil
+	case internal.UnexpectedResponseError:
+		if e.StatusCode == http.StatusInternalServerError {
+			return build, false, GenericError{e.Body}
+		} else {
+			return build, false, err
 		}
-
-		return false, err
+	default:
+		return build, false, err
 	}
 }

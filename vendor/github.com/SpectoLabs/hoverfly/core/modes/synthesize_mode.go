@@ -6,8 +6,8 @@ import (
 
 	"github.com/SpectoLabs/hoverfly/core/models"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/SpectoLabs/hoverfly/core/handlers/v2"
+	log "github.com/sirupsen/logrus"
 )
 
 type HoverflySynthesize interface {
@@ -27,7 +27,7 @@ func (this *SynthesizeMode) View() v2.ModeView {
 	}
 }
 
-func (this SynthesizeMode) Process(request *http.Request, details models.RequestDetails) (*http.Response, error) {
+func (this SynthesizeMode) Process(request *http.Request, details models.RequestDetails) (ProcessResult, error) {
 	pair := models.RequestResponsePair{Request: details}
 
 	log.WithFields(log.Fields{
@@ -52,5 +52,6 @@ func (this SynthesizeMode) Process(request *http.Request, details models.Request
 		"request": GetRequestLogFields(&pair.Request),
 	}).Info("synthetic response created successfuly")
 
-	return ReconstructResponse(request, pair), nil
+	response := ReconstructResponse(request, pair)
+	return newProcessResult(response, pair.Response.FixedDelay, pair.Response.LogNormalDelay), nil
 }

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 type StoreLogsHook struct {
@@ -42,10 +42,6 @@ func (hook StoreLogsHook) Levels() []logrus.Level {
 }
 
 type Fields map[string]interface{}
-
-func (hook StoreLogsHook) GetLogsCount() int {
-	return len(hook.Entries)
-}
 
 func (hook StoreLogsHook) GetLogs(limit int, from *time.Time) ([]*logrus.Entry, error) {
 	if hook.LogsLimit == 0 {

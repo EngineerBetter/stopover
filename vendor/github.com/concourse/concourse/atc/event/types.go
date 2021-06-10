@@ -9,8 +9,11 @@ const (
 	// build status change (e.g. 'started', 'succeeded')
 	EventTypeStatus atc.EventType = "status"
 
-	// step initializing
-	EventTypeInitialize atc.EventType = "initialize"
+	// a step (get/put/task) is waiting for a worker
+	EventTypeWaitingForWorker atc.EventType = "waiting-for-worker"
+
+	// a step (get/put/task) selected worker
+	EventTypeSelectedWorker atc.EventType = "selected-worker"
 
 	// task execution started
 	EventTypeStartTask atc.EventType = "start-task"
@@ -21,12 +24,41 @@ const (
 	// task execution finished
 	EventTypeFinishTask atc.EventType = "finish-task"
 
+	// initialize getting something
+	EventTypeInitializeGet atc.EventType = "initialize-get"
+
+	// started getting something
+	EventTypeStartGet atc.EventType = "start-get"
+
 	// finished getting something
 	EventTypeFinishGet atc.EventType = "finish-get"
+
+	// initialize putting something
+	EventTypeInitializePut atc.EventType = "initialize-put"
+
+	// started putting something
+	EventTypeStartPut atc.EventType = "start-put"
 
 	// finished putting something
 	EventTypeFinishPut atc.EventType = "finish-put"
 
+	EventTypeSetPipelineChanged atc.EventType = "set-pipeline-changed"
+
+	// initialize step
+	EventTypeInitialize atc.EventType = "initialize"
+
+	// started step
+	EventTypeStart atc.EventType = "start"
+
+	// finished step
+	EventTypeFinish atc.EventType = "finish"
+
 	// error occurred
 	EventTypeError atc.EventType = "error"
+
+	// image check sub-plan
+	EventTypeImageCheck atc.EventType = "image-check"
+
+	// image get sub-plan
+	EventTypeImageGet atc.EventType = "image-get"
 )

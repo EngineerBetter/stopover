@@ -1,24 +1,23 @@
 package hoverfly
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/base64"
 	"io/ioutil"
-	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
 
 	"fmt"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/SpectoLabs/goproxy"
 	"github.com/SpectoLabs/goproxy/ext/auth"
 	"github.com/SpectoLabs/hoverfly/core/authentication"
 	"github.com/SpectoLabs/hoverfly/core/authentication/backends"
 	"github.com/SpectoLabs/hoverfly/core/util"
+	log "github.com/sirupsen/logrus"
 )
 
 var ProxyAuthorizationHeader string
@@ -30,9 +29,6 @@ func NewProxy(hoverfly *Hoverfly) *goproxy.ProxyHttpServer {
 
 	// creating proxy
 	proxy := goproxy.NewProxyHttpServer()
-
-	proxy.OnRequest(goproxy.UrlMatches(regexp.MustCompile(hoverfly.Cfg.Destination))).
-		HandleConnect(goproxy.AlwaysMitm)
 
 	if hoverfly.Cfg.HttpsOnly {
 		log.Info("Disabling HTTP")
@@ -56,35 +52,16 @@ func NewProxy(hoverfly *Hoverfly) *goproxy.ProxyHttpServer {
 		})
 	}
 
-	// enable curl -p for all hosts on port 80
-	proxy.OnRequest(goproxy.UrlMatches(regexp.MustCompile(hoverfly.Cfg.Destination))).
-		HijackConnect(func(req *http.Request, client net.Conn, ctx *goproxy.ProxyCtx) {
-			defer func() {
-				if e := recover(); e != nil {
-					ctx.Logf("error connecting to remote: %v", e)
-					client.Write([]byte("HTTP/1.1 500 Cannot reach destination\r\n\r\n"))
-				}
-				client.Close()
-			}()
-			clientBuf := bufio.NewReadWriter(bufio.NewReader(client), bufio.NewWriter(client))
-			remote, err := net.Dial("tcp", req.URL.Host)
-			orPanic(err)
-			remoteBuf := bufio.NewReadWriter(bufio.NewReader(remote), bufio.NewWriter(remote))
-			for {
-				req, err := http.ReadRequest(clientBuf.Reader)
-				orPanic(err)
-				orPanic(req.Write(remoteBuf))
-				orPanic(remoteBuf.Flush())
-				resp, err := http.ReadResponse(remoteBuf.Reader, req)
-
-				orPanic(err)
-				orPanic(resp.Write(clientBuf.Writer))
-				orPanic(clientBuf.Flush())
+	proxy.OnRequest(matchesFilter(hoverfly.Cfg.Destination)).
+		HandleConnect(goproxy.FuncHttpsHandler(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
+			if hoverfly.Cfg.PlainHttpTunneling && !strings.HasSuffix(host, ":443") {
+				return goproxy.HTTPMitmConnect, host
 			}
-		})
+			return goproxy.MitmConnect, host
+		}))
 
 	// processing connections
-	proxy.OnRequest(goproxy.UrlMatches(regexp.MustCompile(hoverfly.Cfg.Destination))).DoFunc(
+	proxy.OnRequest(matchesFilter(hoverfly.Cfg.Destination)).DoFunc(
 		func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 			startTime := time.Now()
 			resp := hoverfly.processRequest(r)
@@ -107,7 +84,7 @@ func NewProxy(hoverfly *Hoverfly) *goproxy.ProxyHttpServer {
 	}
 
 	// intercepts response
-	proxy.OnResponse(goproxy.UrlMatches(regexp.MustCompile(hoverfly.Cfg.Destination))).DoFunc(
+	proxy.OnResponse(matchesFilter(hoverfly.Cfg.Destination)).DoFunc(
 		func(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 			hoverfly.Counter.Count(hoverfly.Cfg.GetMode())
 			return resp
@@ -130,7 +107,6 @@ func NewWebserverProxy(hoverfly *Hoverfly) *goproxy.ProxyHttpServer {
 	// creating proxy
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.NonproxyHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Warn("NonproxyHandler")
 		startTime := time.Now()
 		r.URL.Scheme = "http"
 		resp := hoverfly.processRequest(r)
@@ -151,11 +127,10 @@ func NewWebserverProxy(hoverfly *Hoverfly) *goproxy.ProxyHttpServer {
 			}
 		}
 
-		w.Header().Set("Req", r.RequestURI)
-		w.Header().Set("Resp", resp.Header.Get("Content-Length"))
-
 		w.WriteHeader(resp.StatusCode)
 		w.Write([]byte(body))
+
+		hoverfly.Counter.Count(hoverfly.Cfg.GetMode())
 	})
 
 	if hoverfly.Cfg.Verbose {
@@ -192,6 +167,9 @@ func unauthorizedError(request *http.Request, realm, message string) *http.Respo
 func proxyBasicAndBearer(proxy *goproxy.ProxyHttpServer, realm string, basicFunc func(user, passwd string) bool, bearerFunc func(token string) bool) {
 
 	proxy.OnRequest().Do(goproxy.FuncReqHandler(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+		if strings.HasSuffix(req.URL.Host, ":443") {
+			return req, nil
+		}
 		err := authFromHeader(req, basicFunc, bearerFunc)
 		if err != nil {
 			return nil, unauthorizedError(req, realm, err.Error())
@@ -244,4 +222,29 @@ func authFromHeader(req *http.Request, basicFunc func(user, passwd string) bool,
 	}
 
 	return nil
+}
+
+func matchesFilter(filter string) goproxy.ReqConditionFunc {
+	re := regexp.MustCompile(filter)
+	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
+
+		scheme := req.URL.Scheme
+		host := req.Host // relative URL does not have host value, and this is a safer way to get the hostname from request struct
+		path := req.URL.Path
+
+		if scheme == "https" || strings.Contains(host, ":443") {
+			scheme = "https"
+			host = strings.Replace(host, ":443", "", 1)
+		}
+
+		if req.Method == http.MethodConnect {
+			parsed, _ := url.Parse(filter)
+			re = regexp.MustCompile(parsed.Scheme + "://" + parsed.Host)
+		}
+
+		return re.MatchString(path) ||
+			re.MatchString(host+path) ||
+			re.MatchString(scheme+"://"+host+path)
+
+	}
 }

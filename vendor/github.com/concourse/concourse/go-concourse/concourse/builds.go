@@ -35,17 +35,18 @@ func (team *team) CreateBuild(plan atc.Plan) (atc.Build, error) {
 	return build, err
 }
 
-func (team *team) CreateJobBuild(pipelineName string, jobName string) (atc.Build, error) {
+func (team *team) CreateJobBuild(pipelineRef atc.PipelineRef, jobName string) (atc.Build, error) {
 	params := rata.Params{
 		"job_name":      jobName,
-		"pipeline_name": pipelineName,
-		"team_name":     team.name,
+		"pipeline_name": pipelineRef.Name,
+		"team_name":     team.Name(),
 	}
 
 	var build atc.Build
 	err := team.connection.Send(internal.Request{
 		RequestName: atc.CreateJobBuild,
 		Params:      params,
+		Query:       pipelineRef.QueryParams(),
 	}, &internal.Response{
 		Result: &build,
 	})
@@ -53,22 +54,39 @@ func (team *team) CreateJobBuild(pipelineName string, jobName string) (atc.Build
 	return build, err
 }
 
-func (team *team) JobBuild(pipelineName, jobName, buildName string) (atc.Build, bool, error) {
-	if pipelineName == "" {
-		return atc.Build{}, false, NameRequiredError("pipeline")
+func (team *team) RerunJobBuild(pipelineRef atc.PipelineRef, jobName string, buildName string) (atc.Build, error) {
+	params := rata.Params{
+		"build_name":    buildName,
+		"job_name":      jobName,
+		"pipeline_name": pipelineRef.Name,
+		"team_name":     team.Name(),
 	}
 
+	var build atc.Build
+	err := team.connection.Send(internal.Request{
+		RequestName: atc.RerunJobBuild,
+		Params:      params,
+		Query:       pipelineRef.QueryParams(),
+	}, &internal.Response{
+		Result: &build,
+	})
+
+	return build, err
+}
+
+func (team *team) JobBuild(pipelineRef atc.PipelineRef, jobName, buildName string) (atc.Build, bool, error) {
 	params := rata.Params{
 		"job_name":      jobName,
 		"build_name":    buildName,
-		"pipeline_name": pipelineName,
-		"team_name":     team.name,
+		"pipeline_name": pipelineRef.Name,
+		"team_name":     team.Name(),
 	}
 
 	var build atc.Build
 	err := team.connection.Send(internal.Request{
 		RequestName: atc.GetJobBuild,
 		Params:      params,
+		Query:       pipelineRef.QueryParams(),
 	}, &internal.Response{
 		Result: &build,
 	})
@@ -148,7 +166,7 @@ func (team *team) Builds(page Page) ([]atc.Build, Pagination, error) {
 	headers := http.Header{}
 
 	params := rata.Params{
-		"team_name": team.name,
+		"team_name": team.Name(),
 	}
 
 	err := team.connection.Send(internal.Request{
@@ -171,4 +189,21 @@ func (team *team) Builds(page Page) ([]atc.Build, Pagination, error) {
 	default:
 		return nil, Pagination{}, err
 	}
+}
+
+func (client *client) ListBuildArtifacts(buildID string) ([]atc.WorkerArtifact, error) {
+	params := rata.Params{
+		"build_id": buildID,
+	}
+
+	var artifacts []atc.WorkerArtifact
+
+	err := client.connection.Send(internal.Request{
+		RequestName: atc.ListBuildArtifacts,
+		Params:      params,
+	}, &internal.Response{
+		Result: &artifacts,
+	})
+
+	return artifacts, err
 }
