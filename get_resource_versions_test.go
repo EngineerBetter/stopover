@@ -31,8 +31,8 @@ var _ = Describe("GetResourceVersions", func() {
 		Ω(err).ShouldNot(HaveOccurred())
 
 		fakeTeam := new(concoursefakes.FakeTeam)
-		fakeTeam.JobBuildStub = func(pipeline, job, build string) (atc.Build, bool, error) {
-			if pipeline == "control-tower" && job == "minor" && build == "1" {
+		fakeTeam.JobBuildStub = func(pipeline atc.PipelineRef, job, build string) (atc.Build, bool, error) {
+			if pipeline.Name == "control-tower" && job == "minor" && build == "1" {
 				return atc.Build{ID: 2098}, true, nil
 			}
 
@@ -40,7 +40,7 @@ var _ = Describe("GetResourceVersions", func() {
 		}
 
 		wrongTeam := new(concoursefakes.FakeTeam)
-		wrongTeam.JobBuildStub = func(pipeline, job, build string) (atc.Build, bool, error) {
+		wrongTeam.JobBuildStub = func(pipeline atc.PipelineRef, job, build string) (atc.Build, bool, error) {
 			return atc.Build{}, false, nil
 		}
 

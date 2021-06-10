@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"math/big"
+	"math/rand"
 	"net"
 	"runtime"
 	"sort"
@@ -44,9 +45,7 @@ func signHost(ca tls.Certificate, hosts []string) (cert tls.Certificate, err err
 	if err != nil {
 		panic(err)
 	}
-	hash := hashSorted(append(hosts, goproxySignerVersion, ":"+runtime.Version()))
-	serial := new(big.Int)
-	serial.SetBytes(hash)
+	serial := big.NewInt(rand.Int63())
 	template := x509.Certificate{
 		// TODO(elazar): instead of this ugly hack, just encode the certificate and hash the binary form.
 		SerialNumber: serial,
@@ -68,12 +67,13 @@ func signHost(ca tls.Certificate, hosts []string) (cert tls.Certificate, err err
 			template.DNSNames = append(template.DNSNames, h)
 		}
 	}
+	hash := hashSorted(append(hosts, goproxySignerVersion, ":"+runtime.Version()))
 	var csprng CounterEncryptorRand
 	if csprng, err = NewCounterEncryptorRandFromKey(ca.PrivateKey, hash); err != nil {
 		return
 	}
 	var certpriv *rsa.PrivateKey
-	if certpriv, err = rsa.GenerateKey(&csprng, 1024); err != nil {
+	if certpriv, err = rsa.GenerateKey(&csprng, 2048); err != nil {
 		return
 	}
 	var derBytes []byte
@@ -84,4 +84,9 @@ func signHost(ca tls.Certificate, hosts []string) (cert tls.Certificate, err err
 		Certificate: [][]byte{derBytes, ca.Certificate[0]},
 		PrivateKey:  certpriv,
 	}, nil
+}
+
+func init() {
+	// Avoid deterministic random numbers
+	rand.Seed(time.Now().UnixNano())
 }

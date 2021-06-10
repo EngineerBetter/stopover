@@ -1,6 +1,6 @@
 package cache
 
-// Cache - cache interface used to store and retrieve request/response payloads or anything else
+// Cache - cache interface used to store and retrieve serialized data
 type Cache interface {
 	Set(key, value []byte) error
 	Get(key []byte) ([]byte, error)

@@ -3,7 +3,7 @@ package atc
 type VersionedResourceType struct {
 	ResourceType
 
-	Version Version `yaml:"version" json:"version" mapstructure:"version"`
+	Version Version `json:"version"`
 }
 
 type VersionedResourceTypes []VersionedResourceType
@@ -27,4 +27,19 @@ func (types VersionedResourceTypes) Without(name string) VersionedResourceTypes 
 	}
 
 	return newTypes
+}
+
+func (types VersionedResourceTypes) Base(name string) string {
+	base := name
+	for {
+		resourceType, found := types.Lookup(base)
+		if !found {
+			break
+		}
+
+		types = types.Without(base)
+		base = resourceType.Type
+	}
+
+	return base
 }

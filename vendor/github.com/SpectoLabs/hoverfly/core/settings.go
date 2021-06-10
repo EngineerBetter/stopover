@@ -1,20 +1,22 @@
 package hoverfly
 
 import (
+	"github.com/SpectoLabs/hoverfly/core/cors"
 	"os"
 	"strconv"
 	"sync"
 
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/SpectoLabs/hoverfly/core/middleware"
+	log "github.com/sirupsen/logrus"
 )
 
 // Configuration - initial structure of configuration
 type Configuration struct {
 	AdminPort    string
 	ProxyPort    string
+	ListenOnHost string
 	Mode         string
 	Destination  string
 	Middleware   middleware.Middleware
@@ -24,10 +26,12 @@ type Configuration struct {
 	TLSVerification bool
 
 	UpstreamProxy string
+	PACFile       []byte
 
 	Verbose bool
 
 	DisableCache bool
+	CacheSize    int
 
 	SecretKey          []byte
 	JWTExpirationDelta int
@@ -36,6 +40,19 @@ type Configuration struct {
 	ProxyAuthorizationHeader string
 
 	HttpsOnly bool
+
+	PlainHttpTunneling bool
+	CORS               cors.Configs
+
+	NoImportCheck bool
+
+	ClientAuthenticationDestination string
+	ClientAuthenticationClientCert  string
+	ClientAuthenticationClientKey   string
+	ClientAuthenticationCACert      string
+
+	ResponsesBodyFilesPath string
+	ResponsesBodyFilesAllowedOrigins []string
 
 	ProxyControlWG sync.WaitGroup
 
@@ -70,6 +87,8 @@ const DefaultPort = "8500"
 // DefaultAdminPort - default admin interface port
 const DefaultAdminPort = "8888"
 
+const DefaultListenOnHost = "127.0.0.1"
+
 // DefaultDatabasePath - default database name that will be created
 // or used by Hoverfly
 const DefaultDatabasePath = "requests.db"
@@ -79,6 +98,7 @@ const DefaultJWTExpirationDelta = 1 * 24 * 60 * 60
 
 // Environment variables
 const (
+	// TODO Should use naming convention for environment variables
 	HoverflyAuthEnabledEV     = "HoverflyAuthEnabled"
 	HoverflySecretEV          = "HoverflySecret"
 	HoverflyTokenExpirationEV = "HoverflyTokenExpiration"
@@ -97,6 +117,7 @@ const (
 	HoverflyImportRecordsEV = "HoverflyImport"
 
 	HoverflyUpstreamProxyPortEV = "UpstreamProxy"
+	HoverflySkipImportCheckEV   = "SKIP_IMPORT_CHECK"
 )
 
 // InitSettings gets and returns initial configuration from env
@@ -118,6 +139,8 @@ func InitSettings() *Configuration {
 		appConfig.ProxyPort = DefaultPort
 	}
 
+	appConfig.ListenOnHost = DefaultListenOnHost
+
 	// getting external proxy
 	if os.Getenv(HoverflyUpstreamProxyPortEV) != "" {
 		appConfig.UpstreamProxy = os.Getenv(HoverflyUpstreamProxyPortEV)
@@ -135,7 +158,7 @@ func InitSettings() *Configuration {
 	if os.Getenv(HoverflySecretEV) != "" {
 		appConfig.SecretKey = []byte(os.Getenv(HoverflySecretEV))
 	} else {
-		appConfig.SecretKey = GetRandomName(10)
+		appConfig.SecretKey = getRandomName(10)
 	}
 
 	if os.Getenv(HoverflyTokenExpirationEV) != "" {
@@ -171,9 +194,17 @@ func InitSettings() *Configuration {
 		appConfig.TLSVerification = true
 	}
 
+	if os.Getenv(HoverflySkipImportCheckEV) == "true" {
+		appConfig.NoImportCheck = true
+	} else {
+		appConfig.NoImportCheck = false
+	}
+
 	appConfig.Mode = "simulate"
 
 	appConfig.ProxyAuthorizationHeader = "Proxy-Authorization"
+
+	appConfig.CacheSize = 1000
 
 	return &appConfig
 }

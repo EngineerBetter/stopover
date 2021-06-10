@@ -1,41 +1,65 @@
 package atc
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
+
+	"golang.org/x/crypto/ssh"
+	"sigs.k8s.io/yaml"
+
+	"github.com/concourse/concourse/vars"
 )
 
 const ConfigVersionHeader = "X-Concourse-Config-Version"
-const DefaultPipelineName = "main"
 const DefaultTeamName = "main"
 
 type Tags []string
 
-type ConfigResponse struct {
-	Config    *Config   `json:"config"`
-	Errors    []string  `json:"errors"`
-	RawConfig RawConfig `json:"raw_config"`
-}
-
 type Config struct {
-	Groups        GroupConfigs    `yaml:"groups" json:"groups" mapstructure:"groups"`
-	Resources     ResourceConfigs `yaml:"resources" json:"resources" mapstructure:"resources"`
-	ResourceTypes ResourceTypes   `yaml:"resource_types" json:"resource_types" mapstructure:"resource_types"`
-	Jobs          JobConfigs      `yaml:"jobs" json:"jobs" mapstructure:"jobs"`
+	Groups        GroupConfigs     `json:"groups,omitempty"`
+	VarSources    VarSourceConfigs `json:"var_sources,omitempty"`
+	Resources     ResourceConfigs  `json:"resources,omitempty"`
+	ResourceTypes ResourceTypes    `json:"resource_types,omitempty"`
+	Jobs          JobConfigs       `json:"jobs,omitempty"`
+	Display       *DisplayConfig   `json:"display,omitempty"`
 }
 
-type RawConfig string
+func UnmarshalConfig(payload []byte, config interface{}) error {
+	// a 'skeleton' of Config, specifying only the toplevel fields
+	type skeletonConfig struct {
+		Groups        interface{} `json:"groups,omitempty"`
+		VarSources    interface{} `json:"var_sources,omitempty"`
+		Resources     interface{} `json:"resources,omitempty"`
+		ResourceTypes interface{} `json:"resource_types,omitempty"`
+		Jobs          interface{} `json:"jobs,omitempty"`
+		Display       interface{} `json:"display,omitempty"`
+	}
 
-func (r RawConfig) String() string {
-	return string(r)
+	var stripped skeletonConfig
+	err := yaml.Unmarshal(payload, &stripped)
+	if err != nil {
+		return err
+	}
+
+	strippedPayload, err := yaml.Marshal(stripped)
+	if err != nil {
+		return err
+	}
+
+	return yaml.UnmarshalStrict(
+		strippedPayload,
+		&config,
+	)
 }
 
 type GroupConfig struct {
-	Name      string   `yaml:"name" json:"name" mapstructure:"name"`
-	Jobs      []string `yaml:"jobs,omitempty" json:"jobs,omitempty" mapstructure:"jobs"`
-	Resources []string `yaml:"resources,omitempty" json:"resources,omitempty" mapstructure:"resources"`
+	Name      string   `json:"name"`
+	Jobs      []string `json:"jobs,omitempty"`
+	Resources []string `json:"resources,omitempty"`
 }
 
 type GroupConfigs []GroupConfig
@@ -50,28 +74,178 @@ func (groups GroupConfigs) Lookup(name string) (GroupConfig, int, bool) {
 	return GroupConfig{}, -1, false
 }
 
+type VarSourceConfig struct {
+	Name   string      `json:"name"`
+	Type   string      `json:"type"`
+	Config interface{} `json:"config"`
+}
+
+type VarSourceConfigs []VarSourceConfig
+
+func (c VarSourceConfigs) Lookup(name string) (VarSourceConfig, bool) {
+	for _, cm := range c {
+		if cm.Name == name {
+			return cm, true
+		}
+	}
+
+	return VarSourceConfig{}, false
+}
+
+type pendingVarSource struct {
+	vs   VarSourceConfig
+	deps []string
+}
+
+func (c VarSourceConfigs) OrderByDependency() (VarSourceConfigs, error) {
+	ordered := VarSourceConfigs{}
+	pending := []pendingVarSource{}
+	added := map[string]interface{}{}
+
+	for _, vs := range c {
+		b, err := yaml.Marshal(vs.Config)
+		if err != nil {
+			return nil, err
+		}
+
+		template := vars.NewTemplate(b)
+		varNames := template.ExtraVarNames()
+
+		dependencies := []string{}
+		for _, varName := range varNames {
+			parts := strings.Split(varName, ":")
+			if len(parts) > 1 {
+				dependencies = append(dependencies, parts[0])
+			}
+		}
+
+		if len(dependencies) == 0 {
+			// If no dependency, add the var source to ordered list.
+			ordered = append(ordered, vs)
+			added[vs.Name] = true
+		} else {
+			// If there are some dependencies, then check if dependencies have
+			// already been added to ordered list, if yes, then add it; otherwise
+			// add it to a pending list.
+			miss := false
+			for _, dep := range dependencies {
+				if added[dep] == nil {
+					miss = true
+					break
+				}
+			}
+			if !miss {
+				ordered = append(ordered, vs)
+				added[vs.Name] = true
+			} else {
+				pending = append(pending, pendingVarSource{vs, dependencies})
+				continue
+			}
+		}
+
+		// Once a var_source is added to ordered list, check if any pending
+		// var_source can be added to ordered list.
+		left := []pendingVarSource{}
+		for _, pendingVs := range pending {
+			miss := false
+			for _, dep := range pendingVs.deps {
+				if added[dep] == nil {
+					miss = true
+					break
+				}
+			}
+			if !miss {
+				ordered = append(ordered, pendingVs.vs)
+				added[pendingVs.vs.Name] = true
+			} else {
+				left = append(left, pendingVs)
+			}
+		}
+		pending = left
+	}
+
+	if len(pending) > 0 {
+		names := []string{}
+		for _, vs := range pending {
+			names = append(names, vs.vs.Name)
+		}
+		return nil, fmt.Errorf("could not resolve inter-dependent var sources: %s", strings.Join(names, ", "))
+	}
+
+	return ordered, nil
+}
+
 type ResourceConfig struct {
-	Name         string  `yaml:"name" json:"name" mapstructure:"name"`
-	WebhookToken string  `yaml:"webhook_token,omitempty" json:"webhook_token" mapstructure:"webhook_token"`
-	Type         string  `yaml:"type" json:"type" mapstructure:"type"`
-	Source       Source  `yaml:"source" json:"source" mapstructure:"source"`
-	CheckEvery   string  `yaml:"check_every,omitempty" json:"check_every" mapstructure:"check_every"`
-	CheckTimeout string  `yaml:"check_timeout,omitempty" json:"check_timeout" mapstructure:"check_timeout"`
-	Tags         Tags    `yaml:"tags,omitempty" json:"tags" mapstructure:"tags"`
-	Version      Version `yaml:"version,omitempty" json:"version" mapstructure:"version"`
+	Name                 string      `json:"name"`
+	OldName              string      `json:"old_name,omitempty"`
+	Public               bool        `json:"public,omitempty"`
+	WebhookToken         string      `json:"webhook_token,omitempty"`
+	Type                 string      `json:"type"`
+	Source               Source      `json:"source"`
+	CheckEvery           *CheckEvery `json:"check_every,omitempty"`
+	CheckTimeout         string      `json:"check_timeout,omitempty"`
+	Tags                 Tags        `json:"tags,omitempty"`
+	Version              Version     `json:"version,omitempty"`
+	Icon                 string      `json:"icon,omitempty"`
+	ExposeBuildCreatedBy bool        `json:"expose_build_created_by,omitempty"`
 }
 
 type ResourceType struct {
-	Name                 string `yaml:"name" json:"name" mapstructure:"name"`
-	Type                 string `yaml:"type" json:"type" mapstructure:"type"`
-	Source               Source `yaml:"source" json:"source" mapstructure:"source"`
-	Privileged           bool   `yaml:"privileged,omitempty" json:"privileged" mapstructure:"privileged"`
-	CheckEvery           string `yaml:"check_every,omitempty" json:"check_every,omitempty" mapstructure:"check_every"`
-	Tags                 Tags   `yaml:"tags,omitempty" json:"tags,omitempty" mapstructure:"tags"`
-	Params               Params `yaml:"params,omitempty" json:"params,omitempty" mapstructure:"params"`
-	CheckSetupError      string `yaml:"check_setup_error,omitempty" json:"check_setup_error,omitempty" mapstructure:"check_setup_error"`
-	CheckError           string `yaml:"check_error,omitempty" json:"check_error,omitempty" mapstructure:"check_error"`
-	UniqueVersionHistory bool   `yaml:"unique_version_history,omitempty" json:"unique_version_history" mapstructure:"unique_version_history"`
+	Name       string      `json:"name"`
+	Type       string      `json:"type"`
+	Source     Source      `json:"source"`
+	Defaults   Source      `json:"defaults,omitempty"`
+	Privileged bool        `json:"privileged,omitempty"`
+	CheckEvery *CheckEvery `json:"check_every,omitempty"`
+	Tags       Tags        `json:"tags,omitempty"`
+	Params     Params      `json:"params,omitempty"`
+}
+
+type DisplayConfig struct {
+	BackgroundImage string `json:"background_image,omitempty"`
+}
+
+type CheckEvery struct {
+	Never    bool
+	Interval time.Duration
+}
+
+func (c *CheckEvery) UnmarshalJSON(checkEvery []byte) error {
+	var data interface{}
+
+	err := json.Unmarshal(checkEvery, &data)
+	if err != nil {
+		return err
+	}
+
+	actual, ok := data.(string)
+	if !ok {
+		return errors.New("non-string value provided")
+	}
+
+	if actual != "" {
+		if actual == "never" {
+			c.Never = true
+			return nil
+		}
+		c.Interval, err = time.ParseDuration(actual)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *CheckEvery) MarshalJSON() ([]byte, error) {
+	if c.Never {
+		return json.Marshal("never")
+	}
+
+	if c.Interval != 0 {
+		return json.Marshal(c.Interval.String())
+	}
+
+	return json.Marshal("")
 }
 
 type ResourceTypes []ResourceType
@@ -95,341 +269,6 @@ func (types ResourceTypes) Without(name string) ResourceTypes {
 	}
 
 	return newTypes
-}
-
-type Hooks struct {
-	Abort   *PlanConfig
-	Failure *PlanConfig
-	Ensure  *PlanConfig
-	Success *PlanConfig
-}
-
-// A PlanSequence corresponds to a chain of Compose plan, with an implicit
-// `on: [success]` after every Task plan.
-type PlanSequence []PlanConfig
-
-// A VersionConfig represents the choice to include every version of a
-// resource, the latest version of a resource, or a pinned (specific) one.
-type VersionConfig struct {
-	Every  bool
-	Latest bool
-	Pinned Version
-}
-
-func (c *VersionConfig) UnmarshalJSON(version []byte) error {
-	var data interface{}
-
-	err := json.Unmarshal(version, &data)
-	if err != nil {
-		return err
-	}
-
-	switch actual := data.(type) {
-	case string:
-		c.Every = actual == "every"
-		c.Latest = actual == "latest"
-	case map[string]interface{}:
-		version := Version{}
-
-		for k, v := range actual {
-			if s, ok := v.(string); ok {
-				version[k] = strings.TrimSpace(s)
-			}
-		}
-
-		c.Pinned = version
-	default:
-		return errors.New("unknown type for version")
-	}
-
-	return nil
-}
-
-func (c *VersionConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var data interface{}
-
-	err := unmarshal(&data)
-	if err != nil {
-		return err
-	}
-
-	switch actual := data.(type) {
-	case string:
-		c.Every = actual == "every"
-		c.Latest = actual == "latest"
-	case map[interface{}]interface{}:
-		version := Version{}
-
-		for k, v := range actual {
-			if ks, ok := k.(string); ok {
-				if vs, ok := v.(string); ok {
-					version[ks] = strings.TrimSpace(vs)
-				}
-			}
-		}
-
-		c.Pinned = version
-	default:
-		return errors.New("unknown type for version")
-	}
-
-	return nil
-}
-
-func (c *VersionConfig) MarshalYAML() (interface{}, error) {
-	if c.Latest {
-		return VersionLatest, nil
-	}
-
-	if c.Every {
-		return VersionEvery, nil
-	}
-
-	if c.Pinned != nil {
-		return c.Pinned, nil
-	}
-
-	return nil, nil
-}
-
-func (c *VersionConfig) MarshalJSON() ([]byte, error) {
-	if c.Latest {
-		return json.Marshal(VersionLatest)
-	}
-
-	if c.Every {
-		return json.Marshal(VersionEvery)
-	}
-
-	if c.Pinned != nil {
-		return json.Marshal(c.Pinned)
-	}
-
-	return json.Marshal("")
-}
-
-// A InputsConfig represents the choice to include every artifact within the
-// job as an input to the put step or specific ones.
-type InputsConfig struct {
-	All       bool
-	Specified []string
-}
-
-func (c *InputsConfig) UnmarshalJSON(inputs []byte) error {
-	var data interface{}
-
-	err := json.Unmarshal(inputs, &data)
-	if err != nil {
-		return err
-	}
-
-	switch actual := data.(type) {
-	case string:
-		c.All = actual == "all"
-	case []interface{}:
-		inputs := []string{}
-
-		for _, v := range actual {
-			str, ok := v.(string)
-			if !ok {
-				return fmt.Errorf("non-string put input: %v", v)
-			}
-
-			inputs = append(inputs, strings.TrimSpace(str))
-		}
-
-		c.Specified = inputs
-	default:
-		return errors.New("unknown type for put inputs")
-	}
-
-	return nil
-}
-
-func (c *InputsConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	var data interface{}
-
-	err := unmarshal(&data)
-	if err != nil {
-		return err
-	}
-
-	switch actual := data.(type) {
-	case string:
-		c.All = actual == "all"
-	case []interface{}:
-		inputs := []string{}
-
-		for _, v := range actual {
-			str, ok := v.(string)
-			if !ok {
-				return fmt.Errorf("non-string put input: %v", v)
-			}
-
-			inputs = append(inputs, strings.TrimSpace(str))
-		}
-
-		c.Specified = inputs
-	default:
-		return errors.New("unknown type for put inputs")
-	}
-
-	return nil
-}
-
-func (c InputsConfig) MarshalYAML() (interface{}, error) {
-	if c.All {
-		return InputsAll, nil
-	}
-
-	if c.Specified != nil {
-		return c.Specified, nil
-	}
-
-	return nil, nil
-}
-
-func (c InputsConfig) MarshalJSON() ([]byte, error) {
-	if c.All {
-		return json.Marshal(InputsAll)
-	}
-
-	if c.Specified != nil {
-		return json.Marshal(c.Specified)
-	}
-
-	return json.Marshal("")
-}
-
-// A PlanConfig is a flattened set of configuration corresponding to
-// a particular Plan, where Source and Version are populated lazily.
-type PlanConfig struct {
-	// makes the Plan conditional
-	// conditions on which to perform a nested sequence
-
-	// compose a nested sequence of plans
-	// name of the nested 'do'
-	RawName string `yaml:"name,omitempty" json:"name,omitempty" mapstructure:"name"`
-
-	// a nested chain of steps to run
-	Do *PlanSequence `yaml:"do,omitempty" json:"do,omitempty" mapstructure:"do"`
-
-	// corresponds to an Aggregate plan, keyed by the name of each sub-plan
-	Aggregate *PlanSequence `yaml:"aggregate,omitempty" json:"aggregate,omitempty" mapstructure:"aggregate"`
-
-	// corresponds to Get and Put resource plans, respectively
-	// name of 'input', e.g. bosh-stemcell
-	Get string `yaml:"get,omitempty" json:"get,omitempty" mapstructure:"get"`
-	// jobs that this resource must have made it through
-	Passed []string `yaml:"passed,omitempty" json:"passed,omitempty" mapstructure:"passed"`
-	// whether to trigger based on this resource changing
-	Trigger bool `yaml:"trigger,omitempty" json:"trigger,omitempty" mapstructure:"trigger"`
-
-	// name of 'output', e.g. rootfs-tarball
-	Put string `yaml:"put,omitempty" json:"put,omitempty" mapstructure:"put"`
-
-	// corresponding resource config, e.g. aws-stemcell
-	Resource string `yaml:"resource,omitempty" json:"resource,omitempty" mapstructure:"resource"`
-
-	// inputs to a put step either a list (e.g. [artifact-1, aritfact-2]) or all (e.g. all)
-	Inputs *InputsConfig `yaml:"inputs,omitempty" json:"inputs,omitempty" mapstructure:"inputs"`
-
-	// corresponds to a Task plan
-	// name of 'task', e.g. unit, go1.3, go1.4
-	Task string `yaml:"task,omitempty" json:"task,omitempty" mapstructure:"task"`
-	// run task privileged
-	Privileged bool `yaml:"privileged,omitempty" json:"privileged,omitempty" mapstructure:"privileged"`
-	// task config path, e.g. foo/build.yml
-	TaskConfigPath string `yaml:"file,omitempty" json:"file,omitempty" mapstructure:"file"`
-	// task variables, if task is specified as external file via TaskConfigPath
-	TaskVars Params `yaml:"vars,omitempty" json:"vars,omitempty" mapstructure:"vars"`
-	// inlined task config
-	TaskConfig *TaskConfig `yaml:"config,omitempty" json:"config,omitempty" mapstructure:"config"`
-
-	// used by Get and Put for specifying params to the resource
-	Params Params `yaml:"params,omitempty" json:"params,omitempty" mapstructure:"params"`
-
-	// used to pass specific inputs/outputs as generic inputs/outputs in task config
-	InputMapping  map[string]string `yaml:"input_mapping,omitempty" json:"input_mapping,omitempty" mapstructure:"input_mapping"`
-	OutputMapping map[string]string `yaml:"output_mapping,omitempty" json:"output_mapping,omitempty" mapstructure:"output_mapping"`
-
-	// used to specify an image artifact from a previous build to be used as the image for a subsequent task container
-	ImageArtifactName string `yaml:"image,omitempty" json:"image,omitempty" mapstructure:"image"`
-
-	// used by Put to specify params for the subsequent Get
-	GetParams Params `yaml:"get_params,omitempty" json:"get_params,omitempty" mapstructure:"get_params"`
-
-	// used by any step to specify which workers are eligible to run the step
-	Tags Tags `yaml:"tags,omitempty" json:"tags,omitempty" mapstructure:"tags"`
-
-	// used by any step to run something when the build is aborted during execution of the step
-	Abort *PlanConfig `yaml:"on_abort,omitempty" json:"on_abort,omitempty" mapstructure:"on_abort"`
-
-	// used by any step to run something when the step reports a failure
-	Failure *PlanConfig `yaml:"on_failure,omitempty" json:"on_failure,omitempty" mapstructure:"on_failure"`
-
-	// used on any step to always execute regardless of the step's completed state
-	Ensure *PlanConfig `yaml:"ensure,omitempty" json:"ensure,omitempty" mapstructure:"ensure"`
-
-	// used on any step to execute on successful completion of the step
-	Success *PlanConfig `yaml:"on_success,omitempty" json:"on_success,omitempty" mapstructure:"on_success"`
-
-	// used on any step to swallow failures and errors
-	Try *PlanConfig `yaml:"try,omitempty" json:"try,omitempty" mapstructure:"try"`
-
-	// used on any step to interrupt the step after a given duration
-	Timeout string `yaml:"timeout,omitempty" json:"timeout,omitempty" mapstructure:"timeout"`
-
-	// not present in yaml
-	DependentGet string `yaml:"-" json:"-"`
-
-	// repeat the step up to N times, until it works
-	Attempts int `yaml:"attempts,omitempty" json:"attempts,omitempty" mapstructure:"attempts"`
-
-	Version *VersionConfig `yaml:"version,omitempty" json:"version,omitempty" mapstructure:"version"`
-}
-
-func (config PlanConfig) Name() string {
-	if config.RawName != "" {
-		return config.RawName
-	}
-
-	if config.Get != "" {
-		return config.Get
-	}
-
-	if config.Put != "" {
-		return config.Put
-	}
-
-	if config.Task != "" {
-		return config.Task
-	}
-
-	return ""
-}
-
-func (config PlanConfig) ResourceName() string {
-	resourceName := config.Resource
-	if resourceName != "" {
-		return resourceName
-	}
-
-	resourceName = config.Get
-	if resourceName != "" {
-		return resourceName
-	}
-
-	resourceName = config.Put
-	if resourceName != "" {
-		return resourceName
-	}
-
-	panic("no resource name!")
-}
-
-func (config PlanConfig) Hooks() Hooks {
-	return Hooks{Abort: config.Abort, Failure: config.Failure, Ensure: config.Ensure, Success: config.Success}
 }
 
 type ResourceConfigs []ResourceConfig
@@ -463,4 +302,52 @@ func (config Config) JobIsPublic(jobName string) (bool, error) {
 	}
 
 	return job.Public, nil
+}
+
+func DefaultTLSConfig() *tls.Config {
+	return &tls.Config{
+		MinVersion: tls.VersionTLS12,
+
+		// https://wiki.mozilla.org/Security/Server_Side_TLS#Modern_compatibility
+		CurvePreferences: []tls.CurveID{
+			tls.CurveP256,
+			tls.CurveP384,
+			tls.CurveP521,
+		},
+
+		// Security team recommends a very restricted set of cipher suites
+		CipherSuites: []uint16{
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+		},
+
+		PreferServerCipherSuites: true,
+		NextProtos:               []string{"h2"},
+	}
+}
+
+func DefaultSSHConfig() ssh.Config {
+	return ssh.Config{
+		// use the defaults prefered by go, see https://github.com/golang/crypto/blob/master/ssh/common.go
+		Ciphers: nil,
+
+		// CIS recommends a certain set of MAC algorithms to be used in SSH connections. This restricts the set from a more permissive set used by default by Go.
+		// See https://infosec.mozilla.org/guidelines/openssh.html and https://www.cisecurity.org/cis-benchmarks/
+		MACs: []string{
+			"hmac-sha2-256-etm@openssh.com",
+			"hmac-sha2-256",
+		},
+
+		//[KEX Recommendations for SSH IETF](https://tools.ietf.org/html/draft-ietf-curdle-ssh-kex-sha2-10#section-4)
+		//[Mozilla Openssh Reference](https://infosec.mozilla.org/guidelines/openssh.html)
+		KeyExchanges: []string{
+			"ecdh-sha2-nistp256",
+			"ecdh-sha2-nistp384",
+			"ecdh-sha2-nistp521",
+			"curve25519-sha256@libssh.org",
+		},
+	}
 }

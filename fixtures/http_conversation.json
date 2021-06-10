@@ -1,1 +1,171 @@
-{"data":{"pairs":[{"response":{"status":200,"body":"{\"id\":327,\"team_name\":\"main\",\"name\":\"1\",\"status\":\"failed\",\"job_name\":\"minor\",\"api_url\":\"/api/v1/builds/327\",\"pipeline_name\":\"control-tower\",\"start_time\":1552389802,\"end_time\":1552389883}\n","encodedBody":false,"headers":{"Content-Type":["application/json"],"Date":["Fri, 15 Mar 2019 11:01:31 GMT"],"Hoverfly":["Was-Here"],"Transfer-Encoding":["chunked"],"X-Concourse-Version":["5.0.0"],"X-Content-Type-Options":["nosniff"],"X-Download-Options":["noopen"],"X-Xss-Protection":["1; mode=block"]},"templated":false},"request":{"path":{"exactMatch":"/api/v1/teams/main/pipelines/control-tower/jobs/minor/builds/1"},"method":{"exactMatch":"GET"},"destination":{"exactMatch":"ci.engineerbetter.com"},"scheme":{"exactMatch":"https"},"query":{"exactMatch":""},"body":{"exactMatch":""}}},{"response":{"status":200,"body":"{\"inputs\":[{\"name\":\"control-tower-ops\",\"version\":{\"commit\":\"407f8ab92a7258cbae32d1ad987b64f8d18a9a3a\",\"ref\":\"0.0.8\"},\"pipeline_id\":23,\"first_occurrence\":true},{\"name\":\"control-tower\",\"version\":{\"ref\":\"244a2df8b612d8e9b560ba73023d7673b5d4d007\"},\"pipeline_id\":23,\"first_occurrence\":true},{\"name\":\"pcf-ops\",\"version\":{\"digest\":\"sha256:8a4f9f1647080c224f015cc655146fda7329baa8c7b279b597dee114a69ff97a\"},\"pipeline_id\":23,\"first_occurrence\":true},{\"name\":\"version\",\"version\":{\"number\":\"0.2.0\"},\"pipeline_id\":23,\"first_occurrence\":true}],\"outputs\":[]}\n","encodedBody":false,"headers":{"Content-Type":["application/json"],"Date":["Fri, 15 Mar 2019 11:01:31 GMT"],"Hoverfly":["Was-Here"],"Transfer-Encoding":["chunked"],"X-Concourse-Version":["5.0.0"],"X-Content-Type-Options":["nosniff"],"X-Download-Options":["noopen"],"X-Xss-Protection":["1; mode=block"]},"templated":false},"request":{"path":{"exactMatch":"/api/v1/builds/327/resources"},"method":{"exactMatch":"GET"},"destination":{"exactMatch":"ci.engineerbetter.com"},"scheme":{"exactMatch":"https"},"query":{"exactMatch":""},"body":{"exactMatch":""}}}],"globalActions":{"delays":[]}},"meta":{"schemaVersion":"v3","hoverflyVersion":"v0.13.0","timeExported":"2019-03-15T11:01:31Z"}}
+{
+  "data": {
+    "pairs": [
+      {
+        "request": {
+          "path": [
+            {
+              "matcher": "exact",
+              "value": "/api/v1/teams/main/pipelines/control-tower/jobs/minor/builds/1"
+            }
+          ],
+          "method": [
+            {
+              "matcher": "exact",
+              "value": "GET"
+            }
+          ],
+          "destination": [
+            {
+              "matcher": "exact",
+              "value": "ci.engineerbetter.com"
+            }
+          ],
+          "scheme": [
+            {
+              "matcher": "exact",
+              "value": "https"
+            }
+          ],
+          "body": [
+            {
+              "matcher": "exact",
+              "value": ""
+            }
+          ]
+        },
+        "response": {
+          "status": 200,
+          "body": "{\"id\":327,\"team_name\":\"main\",\"name\":\"1\",\"status\":\"failed\",\"api_url\":\"/api/v1/builds/327\",\"job_name\":\"minor\",\"pipeline_id\":23,\"pipeline_name\":\"control-tower\",\"start_time\":1552389802,\"end_time\":1552389883}\n",
+          "encodedBody": false,
+          "headers": {
+            "Cache-Control": [
+              "no-store, private"
+            ],
+            "Content-Length": [
+              "204"
+            ],
+            "Content-Security-Policy": [
+              "frame-ancestors 'none'"
+            ],
+            "Content-Type": [
+              "application/json"
+            ],
+            "Date": [
+              "Wed, 09 Jun 2021 15:43:37 GMT"
+            ],
+            "Hoverfly": [
+              "Was-Here"
+            ],
+            "Vary": [
+              "Accept-Encoding"
+            ],
+            "X-Concourse-Version": [
+              "7.3.1"
+            ],
+            "X-Content-Type-Options": [
+              "nosniff"
+            ],
+            "X-Download-Options": [
+              "noopen"
+            ],
+            "X-Frame-Options": [
+              "deny"
+            ],
+            "X-Xss-Protection": [
+              "1; mode=block"
+            ]
+          },
+          "templated": false
+        }
+      },
+      {
+        "request": {
+          "path": [
+            {
+              "matcher": "exact",
+              "value": "/api/v1/builds/327/resources"
+            }
+          ],
+          "method": [
+            {
+              "matcher": "exact",
+              "value": "GET"
+            }
+          ],
+          "destination": [
+            {
+              "matcher": "exact",
+              "value": "ci.engineerbetter.com"
+            }
+          ],
+          "scheme": [
+            {
+              "matcher": "exact",
+              "value": "https"
+            }
+          ],
+          "body": [
+            {
+              "matcher": "exact",
+              "value": ""
+            }
+          ]
+        },
+        "response": {
+          "status": 200,
+          "body": "{\"inputs\":[{\"name\":\"control-tower-ops\",\"version\":{\"commit\":\"407f8ab92a7258cbae32d1ad987b64f8d18a9a3a\",\"ref\":\"0.0.8\"},\"pipeline_id\":23,\"first_occurrence\":true},{\"name\":\"control-tower\",\"version\":{\"ref\":\"244a2df8b612d8e9b560ba73023d7673b5d4d007\"},\"pipeline_id\":23,\"first_occurrence\":true},{\"name\":\"pcf-ops\",\"version\":{\"digest\":\"sha256:8a4f9f1647080c224f015cc655146fda7329baa8c7b279b597dee114a69ff97a\"},\"pipeline_id\":23,\"first_occurrence\":true},{\"name\":\"version\",\"version\":{\"number\":\"0.2.0\"},\"pipeline_id\":23,\"first_occurrence\":true}],\"outputs\":[]}\n",
+          "encodedBody": false,
+          "headers": {
+            "Cache-Control": [
+              "no-store, private"
+            ],
+            "Content-Length": [
+              "121"
+            ],
+            "Content-Security-Policy": [
+              "frame-ancestors 'none'"
+            ],
+            "Content-Type": [
+              "application/json"
+            ],
+            "Date": [
+              "Wed, 09 Jun 2021 15:43:38 GMT"
+            ],
+            "Hoverfly": [
+              "Was-Here"
+            ],
+            "Vary": [
+              "Accept-Encoding"
+            ],
+            "X-Concourse-Version": [
+              "7.3.1"
+            ],
+            "X-Content-Type-Options": [
+              "nosniff"
+            ],
+            "X-Download-Options": [
+              "noopen"
+            ],
+            "X-Frame-Options": [
+              "deny"
+            ],
+            "X-Xss-Protection": [
+              "1; mode=block"
+            ]
+          },
+          "templated": false
+        }
+      }
+    ],
+    "globalActions": {
+      "delays": [],
+      "delaysLogNormal": []
+    }
+  },
+  "meta": {
+    "schemaVersion": "v5.1",
+    "hoverflyVersion": "v1.3.2",
+    "timeExported": "2021-06-09T16:43:38+01:00"
+  }
+}

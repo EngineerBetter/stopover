@@ -5,12 +5,17 @@ import (
 	"net/http"
 
 	"github.com/SpectoLabs/hoverfly/core/handlers"
+	"github.com/SpectoLabs/hoverfly/core/util"
 	"github.com/codegangsta/negroni"
 	"github.com/go-zoo/bone"
+	"strconv"
+	"time"
 )
 
+const DefaultJournalLimit = 25
+
 type HoverflyJournal interface {
-	GetEntries() ([]JournalEntryView, error)
+	GetEntries(offset int, limit int, from *time.Time, to *time.Time, sort string) (JournalView, error)
 	GetFilteredEntries(journalEntryFilterView JournalEntryFilterView) ([]JournalEntryView, error)
 	DeleteEntries() error
 }
@@ -38,15 +43,27 @@ func (this *JournalHandler) RegisterRoutes(mux *bone.Mux, am *handlers.AuthHandl
 }
 
 func (this *JournalHandler) Get(response http.ResponseWriter, request *http.Request, next http.HandlerFunc) {
-	var journalView JournalView
 
-	entries, err := this.Hoverfly.GetEntries()
+	queryParams := request.URL.Query()
+	offset, _ := strconv.Atoi(queryParams.Get("offset"))
+	limit, _ := strconv.Atoi(queryParams.Get("limit"))
+	fromTime := util.GetUnixTimeQueryParam(request, "from")
+	toTime := util.GetUnixTimeQueryParam(request, "to")
+	sort := queryParams.Get("sort")
+
+	if limit <= 0 {
+		limit = DefaultJournalLimit
+	}
+
+	if offset < 0 {
+		offset = 0
+	}
+
+	journalView, err := this.Hoverfly.GetEntries(offset, limit, fromTime, toTime, sort)
 	if err != nil {
 		handlers.WriteErrorResponse(response, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	journalView.Journal = entries
 
 	bytes, _ := json.Marshal(journalView)
 	handlers.WriteResponse(response, bytes)

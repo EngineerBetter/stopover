@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"os"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/SpectoLabs/hoverfly/core/handlers"
 	"github.com/codegangsta/negroni"
 	"github.com/go-zoo/bone"
+	log "github.com/sirupsen/logrus"
 )
 
 type ShutdownHandler struct {

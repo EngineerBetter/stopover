@@ -16,17 +16,19 @@ func NewPlanFactory(startingNum int64) PlanFactory {
 	}
 }
 
-type Step interface {
+type PlanConfig interface {
 	Public() *json.RawMessage
 }
 
-func (factory PlanFactory) NewPlan(step Step) Plan {
+func (factory PlanFactory) NewPlan(step PlanConfig) Plan {
 	num := atomic.AddInt64(factory.currentNum, 1)
 
 	var plan Plan
 	switch t := step.(type) {
-	case AggregatePlan:
-		plan.Aggregate = &t
+	case InParallelPlan:
+		plan.InParallel = &t
+	case AcrossPlan:
+		plan.Across = &t
 	case DoPlan:
 		plan.Do = &t
 	case GetPlan:
@@ -35,8 +37,16 @@ func (factory PlanFactory) NewPlan(step Step) Plan {
 		plan.Put = &t
 	case TaskPlan:
 		plan.Task = &t
+	case SetPipelinePlan:
+		plan.SetPipeline = &t
+	case LoadVarPlan:
+		plan.LoadVar = &t
+	case CheckPlan:
+		plan.Check = &t
 	case OnAbortPlan:
 		plan.OnAbort = &t
+	case OnErrorPlan:
+		plan.OnError = &t
 	case EnsurePlan:
 		plan.Ensure = &t
 	case OnSuccessPlan:
@@ -49,8 +59,8 @@ func (factory PlanFactory) NewPlan(step Step) Plan {
 		plan.Timeout = &t
 	case RetryPlan:
 		plan.Retry = &t
-	case UserArtifactPlan:
-		plan.UserArtifact = &t
+	case ArtifactInputPlan:
+		plan.ArtifactInput = &t
 	case ArtifactOutputPlan:
 		plan.ArtifactOutput = &t
 	default:
