@@ -15,7 +15,7 @@ $ stopover https://ci.domain.com team-name pipeline job build-number
 
 ## Using Stopover for Promotion
 
-These blog posts discuss how Stopover is used at EngineerBetter:
+These blog posts discuss how Stopover is used at FidelityInternational:
 
 * [Properly Promoting Pipelines](https://www.engineerbetter.com/blog/pipeline-promotion/)
 * [Continuous Infrastructure on Google Cloud](https://www.engineerbetter.com/blog/continuous-infrastructure-google-cloud/)
@@ -46,7 +46,7 @@ If you `put` this to a resource, then _other_ pipelines can be triggered by chan
 First, you'll need to emit a `stopover` versions YAML file:
 
 * Create a job that runs `stopover`
-* Provide that job a valid ATC bearer token (maybe by using [fly-github-auth-task](https://github.com/EngineerBetter/fly-github-auth-task))
+* Provide that job a valid ATC bearer token (maybe by using [fly-github-auth-task](https://github.com/FidelityInternational/fly-github-auth-task))
 * Provide that job metadata about the current build
 * Provide `get`s to that job, for each resource you want to snapshot. Remember to used `passed` if required.
 * Invoke `stopover`, passing in all the above
