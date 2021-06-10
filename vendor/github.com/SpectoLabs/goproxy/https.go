@@ -127,14 +127,8 @@ func (proxy *ProxyHttpServer) handleHttps(w http.ResponseWriter, r *http.Request
 	case ConnectHTTPMitm:
 		proxyClient.Write([]byte("HTTP/1.0 200 OK\r\n\r\n"))
 		ctx.Logf("Assuming CONNECT is plain HTTP tunneling, mitm proxying it")
-		targetSiteCon, err := proxy.connectDial("tcp", host)
-		if err != nil {
-			ctx.Warnf("Error dialing to %s: %s", host, err.Error())
-			return
-		}
 		for {
 			client := bufio.NewReader(proxyClient)
-			remote := bufio.NewReader(targetSiteCon)
 			req, err := http.ReadRequest(client)
 			if err != nil && err != io.EOF {
 				ctx.Warnf("cannot read request of MITM HTTP client: %+#v", err)
@@ -144,6 +138,13 @@ func (proxy *ProxyHttpServer) handleHttps(w http.ResponseWriter, r *http.Request
 			}
 			req, resp := proxy.filterRequest(req, ctx)
 			if resp == nil {
+				// only connect to remote server if proxy does not produce a response
+				targetSiteCon, err := proxy.connectDial("tcp", host)
+				if err != nil {
+					ctx.Warnf("Error dialing to %s: %s", host, err.Error())
+					return
+				}
+				remote := bufio.NewReader(targetSiteCon)
 				if err := req.Write(targetSiteCon); err != nil {
 					httpError(proxyClient, ctx, err)
 					return
@@ -241,8 +242,11 @@ func (proxy *ProxyHttpServer) handleHttps(w http.ResponseWriter, r *http.Request
 
 				// Since we don't know the length of resp, return chunked encoded response
 				// TODO: use a more reasonable scheme
-				resp.Header.Del("Content-Length")
-				resp.Header.Set("Transfer-Encoding", "chunked")
+
+				if resp.StatusCode >= 200 && resp.StatusCode != 204 {
+					resp.Header.Del("Content-Length")
+					resp.Header.Set("Transfer-Encoding", "chunked")
+				}
 				if err := resp.Header.Write(rawClientTls); err != nil {
 					ctx.Warnf("Cannot write TLS response header from mitm'd client: %v", err)
 					return
@@ -251,18 +255,21 @@ func (proxy *ProxyHttpServer) handleHttps(w http.ResponseWriter, r *http.Request
 					ctx.Warnf("Cannot write TLS response header end from mitm'd client: %v", err)
 					return
 				}
-				chunked := newChunkedWriter(rawClientTls)
-				if _, err := io.Copy(chunked, resp.Body); err != nil {
-					ctx.Warnf("Cannot write TLS response body from mitm'd client: %v", err)
-					return
-				}
-				if err := chunked.Close(); err != nil {
-					ctx.Warnf("Cannot write TLS chunked EOF from mitm'd client: %v", err)
-					return
-				}
-				if _, err = io.WriteString(rawClientTls, "\r\n"); err != nil {
-					ctx.Warnf("Cannot write TLS response chunked trailer from mitm'd client: %v", err)
-					return
+
+				if resp.Header.Get("Transfer-Encoding") == "chunked" {
+					chunked := newChunkedWriter(rawClientTls)
+					if _, err := io.Copy(chunked, resp.Body); err != nil {
+						ctx.Warnf("Cannot write TLS response body from mitm'd client: %v", err)
+						return
+					}
+					if err := chunked.Close(); err != nil {
+						ctx.Warnf("Cannot write TLS chunked EOF from mitm'd client: %v", err)
+						return
+					}
+					if _, err = io.WriteString(rawClientTls, "\r\n"); err != nil {
+						ctx.Warnf("Cannot write TLS response chunked trailer from mitm'd client: %v", err)
+						return
+					}
 				}
 			}
 			ctx.Logf("Exiting on EOF")

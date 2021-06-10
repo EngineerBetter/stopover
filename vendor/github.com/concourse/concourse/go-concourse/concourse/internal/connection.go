@@ -17,8 +17,11 @@ import (
 	"github.com/vito/go-sse/sse"
 )
 
-//go:generate counterfeiter . Connection
+//go:generate go run github.com/maxbrunsfeld/counterfeiter/v6 -generate
 
+//counterfeiter:generate . Connection
+
+// Deprecated. Use HTTPAgent instead
 type Connection interface {
 	URL() string
 	HTTPClient() *http.Client
@@ -43,6 +46,7 @@ type Response struct {
 	Created bool
 }
 
+// Deprecated
 type connection struct {
 	url        string
 	httpClient *http.Client
@@ -51,6 +55,7 @@ type connection struct {
 	requestGenerator *rata.RequestGenerator
 }
 
+// Deprecated
 func NewConnection(apiURL string, httpClient *http.Client, tracing bool) Connection {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
@@ -67,14 +72,17 @@ func NewConnection(apiURL string, httpClient *http.Client, tracing bool) Connect
 	}
 }
 
+// Deprecated
 func (connection *connection) URL() string {
 	return connection.url
 }
 
+// Deprecated
 func (connection *connection) HTTPClient() *http.Client {
 	return connection.httpClient
 }
 
+// Deprecated
 func (connection *connection) Send(passedRequest Request, passedResponse *Response) error {
 	req, err := connection.createHTTPRequest(passedRequest)
 	if err != nil {
@@ -84,10 +92,12 @@ func (connection *connection) Send(passedRequest Request, passedResponse *Respon
 	return connection.send(req, passedRequest.ReturnResponseBody, passedResponse)
 }
 
+// Deprecated
 func (connection *connection) SendHTTPRequest(request *http.Request, returnResponseBody bool, passedResponse *Response) error {
 	return connection.send(request, returnResponseBody, passedResponse)
 }
 
+// Deprecated
 func (connection *connection) send(req *http.Request, returnResponseBody bool, passedResponse *Response) error {
 	if connection.tracing {
 		b, err := httputil.DumpRequestOut(req, true)
@@ -119,6 +129,7 @@ func (connection *connection) send(req *http.Request, returnResponseBody bool, p
 	return connection.populateResponse(response, returnResponseBody, passedResponse)
 }
 
+// Deprecated
 func (connection *connection) ConnectToEventStream(passedRequest Request) (*sse.EventSource, error) {
 	source, err := sse.Connect(connection.httpClient, time.Second, func() *http.Request {
 		request, reqErr := connection.createHTTPRequest(passedRequest)
@@ -144,6 +155,7 @@ func (connection *connection) ConnectToEventStream(passedRequest Request) (*sse.
 	return source, nil
 }
 
+// Deprecated
 func (connection *connection) createHTTPRequest(passedRequest Request) (*http.Request, error) {
 	body := connection.getBody(passedRequest)
 
@@ -167,6 +179,7 @@ func (connection *connection) createHTTPRequest(passedRequest Request) (*http.Re
 	return req, nil
 }
 
+// Deprecated
 func (connection *connection) getBody(passedRequest Request) io.Reader {
 	if passedRequest.Header != nil && passedRequest.Body != nil {
 		if _, ok := passedRequest.Header["Content-Type"]; !ok {
@@ -178,6 +191,7 @@ func (connection *connection) getBody(passedRequest Request) io.Reader {
 	return nil
 }
 
+// Deprecated
 func (connection *connection) populateResponse(response *http.Response, returnResponseBody bool, passedResponse *Response) error {
 	if response.StatusCode == http.StatusNotFound {
 		var errors ResourceNotFoundError

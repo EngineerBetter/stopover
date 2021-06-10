@@ -17,6 +17,7 @@ const (
 
 	GetJob         = "GetJob"
 	CreateJobBuild = "CreateJobBuild"
+	RerunJobBuild  = "RerunJobBuild"
 	ListAllJobs    = "ListAllJobs"
 	ListJobs       = "ListJobs"
 	ListJobBuilds  = "ListJobBuilds"
@@ -24,6 +25,7 @@ const (
 	GetJobBuild    = "GetJobBuild"
 	PauseJob       = "PauseJob"
 	UnpauseJob     = "UnpauseJob"
+	ScheduleJob    = "ScheduleJob"
 	GetVersionsDB  = "GetVersionsDB"
 	JobBadge       = "JobBadge"
 	MainJobBadge   = "MainJobBadge"
@@ -34,8 +36,6 @@ const (
 	ListResources        = "ListResources"
 	ListResourceTypes    = "ListResourceTypes"
 	GetResource          = "GetResource"
-	PauseResource        = "PauseResource"
-	UnpauseResource      = "UnpauseResource"
 	CheckResource        = "CheckResource"
 	CheckResourceWebHook = "CheckResourceWebHook"
 	CheckResourceType    = "CheckResourceType"
@@ -53,19 +53,21 @@ const (
 
 	GetCC = "GetCC"
 
-	ListAllPipelines    = "ListAllPipelines"
-	ListPipelines       = "ListPipelines"
-	GetPipeline         = "GetPipeline"
-	DeletePipeline      = "DeletePipeline"
-	OrderPipelines      = "OrderPipelines"
-	PausePipeline       = "PausePipeline"
-	UnpausePipeline     = "UnpausePipeline"
-	ExposePipeline      = "ExposePipeline"
-	HidePipeline        = "HidePipeline"
-	RenamePipeline      = "RenamePipeline"
-	ListPipelineBuilds  = "ListPipelineBuilds"
-	CreatePipelineBuild = "CreatePipelineBuild"
-	PipelineBadge       = "PipelineBadge"
+	ListAllPipelines          = "ListAllPipelines"
+	ListPipelines             = "ListPipelines"
+	GetPipeline               = "GetPipeline"
+	DeletePipeline            = "DeletePipeline"
+	OrderPipelines            = "OrderPipelines"
+	OrderPipelinesWithinGroup = "OrderPipelinesWithinGroup"
+	PausePipeline             = "PausePipeline"
+	ArchivePipeline           = "ArchivePipeline"
+	UnpausePipeline           = "UnpausePipeline"
+	ExposePipeline            = "ExposePipeline"
+	HidePipeline              = "HidePipeline"
+	RenamePipeline            = "RenamePipeline"
+	ListPipelineBuilds        = "ListPipelineBuilds"
+	CreatePipelineBuild       = "CreatePipelineBuild"
+	PipelineBadge             = "PipelineBadge"
 
 	RegisterWorker  = "RegisterWorker"
 	LandWorker      = "LandWorker"
@@ -79,8 +81,8 @@ const (
 	GetLogLevel = "GetLogLevel"
 
 	DownloadCLI  = "DownloadCLI"
-	GetInfo      = "Info"
-	GetInfoCreds = "InfoCreds"
+	GetInfo      = "GetInfo"
+	GetInfoCreds = "GetInfoCreds"
 
 	ListContainers           = "ListContainers"
 	GetContainer             = "GetContainer"
@@ -93,13 +95,22 @@ const (
 	ReportWorkerVolumes   = "ReportWorkerVolumes"
 
 	ListTeams      = "ListTeams"
+	GetTeam        = "GetTeam"
 	SetTeam        = "SetTeam"
 	RenameTeam     = "RenameTeam"
 	DestroyTeam    = "DestroyTeam"
 	ListTeamBuilds = "ListTeamBuilds"
 
-	SendInputToBuildPlan    = "SendInputToBuildPlan"
-	ReadOutputFromBuildPlan = "ReadOutputFromBuildPlan"
+	CreateArtifact     = "CreateArtifact"
+	GetArtifact        = "GetArtifact"
+	ListBuildArtifacts = "ListBuildArtifacts"
+
+	GetUser              = "GetUser"
+	ListActiveUsersSince = "ListActiveUsersSince"
+
+	SetWall   = "SetWall"
+	GetWall   = "GetWall"
+	ClearWall = "ClearWall"
 )
 
 const (
@@ -116,22 +127,23 @@ var Routes = rata.Routes([]rata.Route{
 	{Path: "/api/v1/builds", Method: "GET", Name: ListBuilds},
 	{Path: "/api/v1/builds/:build_id", Method: "GET", Name: GetBuild},
 	{Path: "/api/v1/builds/:build_id/plan", Method: "GET", Name: GetBuildPlan},
-	{Path: "/api/v1/builds/:build_id/plan/:plan_id/input", Method: "PUT", Name: SendInputToBuildPlan},
-	{Path: "/api/v1/builds/:build_id/plan/:plan_id/output", Method: "GET", Name: ReadOutputFromBuildPlan},
 	{Path: "/api/v1/builds/:build_id/events", Method: "GET", Name: BuildEvents},
 	{Path: "/api/v1/builds/:build_id/resources", Method: "GET", Name: BuildResources},
 	{Path: "/api/v1/builds/:build_id/abort", Method: "PUT", Name: AbortBuild},
 	{Path: "/api/v1/builds/:build_id/preparation", Method: "GET", Name: GetBuildPreparation},
+	{Path: "/api/v1/builds/:build_id/artifacts", Method: "GET", Name: ListBuildArtifacts},
 
 	{Path: "/api/v1/jobs", Method: "GET", Name: ListAllJobs},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/jobs", Method: "GET", Name: ListJobs},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/jobs/:job_name", Method: "GET", Name: GetJob},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/jobs/:job_name/builds", Method: "GET", Name: ListJobBuilds},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/jobs/:job_name/builds", Method: "POST", Name: CreateJobBuild},
+	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/jobs/:job_name/builds/:build_name", Method: "POST", Name: RerunJobBuild},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/jobs/:job_name/inputs", Method: "GET", Name: ListJobInputs},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/jobs/:job_name/builds/:build_name", Method: "GET", Name: GetJobBuild},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/jobs/:job_name/pause", Method: "PUT", Name: PauseJob},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/jobs/:job_name/unpause", Method: "PUT", Name: UnpauseJob},
+	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/jobs/:job_name/schedule", Method: "PUT", Name: ScheduleJob},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/jobs/:job_name/badge", Method: "GET", Name: JobBadge},
 	{Path: "/api/v1/pipelines/:pipeline_name/jobs/:job_name/badge", Method: "GET", Name: MainJobBadge},
 
@@ -142,7 +154,9 @@ var Routes = rata.Routes([]rata.Route{
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name", Method: "GET", Name: GetPipeline},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name", Method: "DELETE", Name: DeletePipeline},
 	{Path: "/api/v1/teams/:team_name/pipelines/ordering", Method: "PUT", Name: OrderPipelines},
+	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/ordering", Method: "PUT", Name: OrderPipelinesWithinGroup},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/pause", Method: "PUT", Name: PausePipeline},
+	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/archive", Method: "PUT", Name: ArchivePipeline},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/unpause", Method: "PUT", Name: UnpausePipeline},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/expose", Method: "PUT", Name: ExposePipeline},
 	{Path: "/api/v1/teams/:team_name/pipelines/:pipeline_name/hide", Method: "PUT", Name: HidePipeline},
@@ -188,6 +202,9 @@ var Routes = rata.Routes([]rata.Route{
 	{Path: "/api/v1/info", Method: "GET", Name: GetInfo},
 	{Path: "/api/v1/info/creds", Method: "GET", Name: GetInfoCreds},
 
+	{Path: "/api/v1/user", Method: "GET", Name: GetUser},
+	{Path: "/api/v1/users", Method: "GET", Name: ListActiveUsersSince},
+
 	{Path: "/api/v1/containers/destroying", Method: "GET", Name: ListDestroyingContainers},
 	{Path: "/api/v1/containers/report", Method: "PUT", Name: ReportWorkerContainers},
 	{Path: "/api/v1/teams/:team_name/containers", Method: "GET", Name: ListContainers},
@@ -199,8 +216,16 @@ var Routes = rata.Routes([]rata.Route{
 	{Path: "/api/v1/volumes/report", Method: "PUT", Name: ReportWorkerVolumes},
 
 	{Path: "/api/v1/teams", Method: "GET", Name: ListTeams},
+	{Path: "/api/v1/teams/:team_name", Method: "GET", Name: GetTeam},
 	{Path: "/api/v1/teams/:team_name", Method: "PUT", Name: SetTeam},
 	{Path: "/api/v1/teams/:team_name/rename", Method: "PUT", Name: RenameTeam},
 	{Path: "/api/v1/teams/:team_name", Method: "DELETE", Name: DestroyTeam},
 	{Path: "/api/v1/teams/:team_name/builds", Method: "GET", Name: ListTeamBuilds},
+
+	{Path: "/api/v1/teams/:team_name/artifacts", Method: "POST", Name: CreateArtifact},
+	{Path: "/api/v1/teams/:team_name/artifacts/:artifact_id", Method: "GET", Name: GetArtifact},
+
+	{Path: "/api/v1/wall", Method: "GET", Name: GetWall},
+	{Path: "/api/v1/wall", Method: "PUT", Name: SetWall},
+	{Path: "/api/v1/wall", Method: "DELETE", Name: ClearWall},
 })

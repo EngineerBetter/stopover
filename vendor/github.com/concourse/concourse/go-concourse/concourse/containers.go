@@ -13,7 +13,7 @@ func (team *team) ListContainers(queryList map[string]string) ([]atc.Container, 
 	urlValues := url.Values{}
 
 	params := rata.Params{
-		"team_name": team.name,
+		"team_name": team.Name(),
 	}
 	for k, v := range queryList {
 		urlValues[k] = []string{v}
@@ -26,4 +26,22 @@ func (team *team) ListContainers(queryList map[string]string) ([]atc.Container, 
 		Result: &containers,
 	})
 	return containers, err
+}
+
+func (team *team) GetContainer(handle string) (atc.Container, error) {
+	var container atc.Container
+
+	params := rata.Params{
+		"id":        handle,
+		"team_name": team.Name(),
+	}
+
+	err := team.connection.Send(internal.Request{
+		RequestName: atc.GetContainer,
+		Params:      params,
+	}, &internal.Response{
+		Result: &container,
+	})
+
+	return container, err
 }

@@ -88,6 +88,8 @@ func removeProxyHeaders(ctx *ProxyCtx, r *http.Request) {
 	//   options that are desired for that particular connection and MUST NOT
 	//   be communicated by proxies over further connections.
 	r.Header.Del("Connection")
+	// If request.Close is not set to false, the transfer.writeHeader function will still write the "Connection: close" header
+	r.Close = false
 }
 
 // Standard net/http function. Shouldn't be used directly, http.Serve will use it.
@@ -135,9 +137,16 @@ func (proxy *ProxyHttpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 		// We keep the original body to remove the header only if things changed.
 		// This will prevent problems with HEAD requests where there's no body, yet,
 		// the Content-Length header should be set.
-		if origBody != resp.Body {
-			resp.Header.Del("Content-Length")
-		}
+
+		// Note from Benji
+		// The way we use goproxy, I do not think this is needed for us
+		// https://github.com/SpectoLabs/hoverfly/issues/697
+		// Hoverfly does not use proxy.filterResponse to change response body, hence the content length is not changed
+		// Hoverfly manages the Content Length header on its own
+
+		// if origBody != resp.Body {
+		// resp.Header.Del("Content-Length")
+		// }
 		copyHeaders(w.Header(), resp.Header)
 		w.WriteHeader(resp.StatusCode)
 		nr, err := io.Copy(w, resp.Body)
@@ -152,7 +161,7 @@ func (proxy *ProxyHttpServer) DisableNonTls(disableNonTls bool) {
 	proxy.tlsOnly = disableNonTls
 }
 
-// New proxy server, logs to StdErr by default
+// NewProxyHttpServer creates and returns a proxy server, logging to stderr by default
 func NewProxyHttpServer() *ProxyHttpServer {
 	proxy := ProxyHttpServer{
 		Logger:        log.New(os.Stderr, "", log.LstdFlags),
