@@ -1,7 +1,7 @@
 package main_test
 
 import (
-	. "github.com/EngineerBetter/stopover"
+	. "github.com/FidelityInternational/stopover"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 

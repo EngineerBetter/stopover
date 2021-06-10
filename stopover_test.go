@@ -31,7 +31,7 @@ var _ = Describe("Stopover", func() {
 
 	BeforeSuite(func() {
 		var err error
-		binPath, err = gexec.Build("github.com/EngineerBetter/stopover")
+		binPath, err = gexec.Build("github.com/FidelityInternational/stopover")
 		Ω(err).ShouldNot(HaveOccurred())
 
 		_, recording = os.LookupEnv("ATC_BEARER_TOKEN")

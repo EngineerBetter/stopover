@@ -1,4 +1,4 @@
-module github.com/EngineerBetter/stopover
+module github.com/FidelityInternational/stopover
 
 go 1.16
 
