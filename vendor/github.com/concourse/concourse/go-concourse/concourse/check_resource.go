@@ -3,7 +3,6 @@ package concourse
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/concourse/concourse/atc"
@@ -11,64 +10,43 @@ import (
 	"github.com/tedsuo/rata"
 )
 
-type CheckResourceError struct {
-	atc.CheckResponseBody
-}
+func (team *team) CheckResource(pipelineRef atc.PipelineRef, resourceName string, version atc.Version) (atc.Build, bool, error) {
 
-func (checkResourceError CheckResourceError) Error() string {
-	return fmt.Sprintf("check failed with exit status '%d':\n%s\n", checkResourceError.ExitStatus, checkResourceError.Stderr)
-}
-
-func (team *team) CheckResource(pipelineName string, resourceName string, version atc.Version) (bool, error) {
 	params := rata.Params{
-		"pipeline_name": pipelineName,
+		"pipeline_name": pipelineRef.Name,
 		"resource_name": resourceName,
-		"team_name":     team.name,
+		"team_name":     team.Name(),
 	}
+
+	var build atc.Build
 
 	jsonBytes, err := json.Marshal(atc.CheckRequestBody{From: version})
 	if err != nil {
-		return false, err
+		return build, false, err
 	}
 
-	response := internal.Response{}
 	err = team.connection.Send(internal.Request{
-		ReturnResponseBody: true,
-		RequestName:        atc.CheckResource,
-		Params:             params,
-		Body:               bytes.NewBuffer(jsonBytes),
-		Header:             http.Header{"Content-Type": []string{"application/json"}},
-	}, &response)
+		RequestName: atc.CheckResource,
+		Params:      params,
+		Query:       pipelineRef.QueryParams(),
+		Body:        bytes.NewBuffer(jsonBytes),
+		Header:      http.Header{"Content-Type": []string{"application/json"}},
+	}, &internal.Response{
+		Result: &build,
+	})
 
-	switch err.(type) {
+	switch e := err.(type) {
 	case nil:
-		return true, nil
+		return build, true, nil
 	case internal.ResourceNotFoundError:
-		return false, nil
-	default:
-		if unexpectedResponseError, ok := err.(internal.UnexpectedResponseError); ok {
-			switch unexpectedResponseError.StatusCode {
-			case http.StatusBadRequest:
-				var checkResourceErr CheckResourceError
-
-				err = json.Unmarshal([]byte(unexpectedResponseError.Body), &checkResourceErr)
-				if err != nil {
-					return false, err
-				}
-
-				return false, checkResourceErr
-			case http.StatusInternalServerError:
-				checkResourceErr := CheckResourceError{
-					atc.CheckResponseBody{
-						Stderr:     unexpectedResponseError.Body,
-						ExitStatus: 70,
-					},
-				}
-
-				return false, checkResourceErr
-			}
+		return build, false, nil
+	case internal.UnexpectedResponseError:
+		if e.StatusCode == http.StatusInternalServerError {
+			return build, false, GenericError{e.Body}
+		} else {
+			return build, false, err
 		}
-
-		return false, err
+	default:
+		return build, false, err
 	}
 }

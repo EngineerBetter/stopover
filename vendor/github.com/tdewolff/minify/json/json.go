@@ -1,5 +1,5 @@
 // Package json minifies JSON following the specifications at http://json.org/.
-package json
+package json // import "github.com/tdewolff/minify/json"
 
 import (
 	"io"
@@ -15,12 +15,15 @@ var (
 
 ////////////////////////////////////////////////////////////////
 
+// DefaultMinifier is the default minifier.
+var DefaultMinifier = &Minifier{}
+
 // Minifier is a JSON minifier.
 type Minifier struct{}
 
 // Minify minifies JSON data, it reads from r and writes to w.
 func Minify(m *minify.M, w io.Writer, r io.Reader, params map[string]string) error {
-	return (&Minifier{}).Minify(m, w, r, params)
+	return DefaultMinifier.Minify(m, w, r, params)
 }
 
 // Minify minifies JSON data, it reads from r and writes to w.
@@ -28,6 +31,8 @@ func (o *Minifier) Minify(_ *minify.M, w io.Writer, r io.Reader, _ map[string]st
 	skipComma := true
 
 	p := json.NewParser(r)
+	defer p.Restore()
+
 	for {
 		state := p.State()
 		gt, text := p.Next()

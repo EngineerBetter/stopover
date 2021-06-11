@@ -11,11 +11,14 @@ import (
 
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/SpectoLabs/hoverfly/core/handlers"
+	"github.com/SpectoLabs/hoverfly/core/util"
 	"github.com/codegangsta/negroni"
 	"github.com/go-zoo/bone"
+	"github.com/sirupsen/logrus"
 )
+
+const defaultTimestampFormat = time.RFC3339
 
 type HoverflyLogs interface {
 	GetLogs(limit int, from *time.Time) ([]*logrus.Entry, error)
@@ -25,7 +28,7 @@ type LogsHandler struct {
 	Hoverfly HoverflyLogs
 }
 
-var DefaultLimit = 500
+const DefaultLogLimit = 500
 
 func (this *LogsHandler) RegisterRoutes(mux *bone.Mux, am *handlers.AuthHandler) {
 	mux.Get("/api/v2/logs", negroni.New(
@@ -43,17 +46,10 @@ func (this *LogsHandler) Get(w http.ResponseWriter, req *http.Request, next http
 	queryParams := req.URL.Query()
 	limitQuery, _ := strconv.Atoi(queryParams.Get("limit"))
 	if limitQuery == 0 {
-		limitQuery = DefaultLimit
+		limitQuery = DefaultLogLimit
 	}
 
-	fromQuery, _ := strconv.Atoi(queryParams.Get("from"))
-
-	var fromTime *time.Time
-	if fromQuery != 0 {
-
-		fromTimeValue := time.Unix(int64(fromQuery), 0)
-		fromTime = &fromTimeValue
-	}
+	fromTime := util.GetUnixTimeQueryParam(req, "from")
 
 	logs, err := this.Hoverfly.GetLogs(limitQuery, fromTime)
 	if err != nil {
@@ -84,7 +80,7 @@ func logsToLogsView(logs []*logrus.Entry) LogsView {
 			data[k] = v
 		}
 
-		data["time"] = entry.Time.Format(logrus.DefaultTimestampFormat)
+		data["time"] = entry.Time.Format(defaultTimestampFormat)
 		data["msg"] = entry.Message
 		data["level"] = entry.Level.String()
 

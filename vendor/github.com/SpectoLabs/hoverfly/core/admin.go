@@ -9,22 +9,23 @@ import (
 	_ "github.com/SpectoLabs/hoverfly/core/statik"
 	"github.com/rakyll/statik/fs"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/codegangsta/negroni"
 	"github.com/go-zoo/bone"
+	log "github.com/sirupsen/logrus"
 
-	handlers "github.com/SpectoLabs/hoverfly/core/handlers"
-	"github.com/SpectoLabs/hoverfly/core/handlers/v1"
+	"github.com/SpectoLabs/hoverfly/core/handlers"
 	"github.com/SpectoLabs/hoverfly/core/handlers/v2"
 )
 
 type AdminApi struct{}
 
-// StartAdminInterface - starts admin interface web server
+// Starts the Admin API on a new HTTP port. Port is chosen by
+// hoverfly.Cfg.AdminPort.
 func (this *AdminApi) StartAdminInterface(hoverfly *Hoverfly) {
+	router := bone.New()
 
-	// starting admin interface
-	mux := this.getBoneRouter(hoverfly)
+	mux := this.addAdminApiRoutes(router, hoverfly)
+	mux = this.addDashboardRoutes(router)
 	n := negroni.New(negroni.NewRecovery(), negroni.NewStatic(http.Dir("public")))
 
 	n.UseHandler(mux)
@@ -34,38 +35,41 @@ func (this *AdminApi) StartAdminInterface(hoverfly *Hoverfly) {
 		"AdminPort": hoverfly.Cfg.AdminPort,
 	}).Info("Admin interface is starting...")
 
-	http.ListenAndServe(fmt.Sprintf(":%s", hoverfly.Cfg.AdminPort), n)
+	http.ListenAndServe(fmt.Sprintf("%s:%s", hoverfly.Cfg.ListenOnHost, hoverfly.Cfg.AdminPort), n)
 }
 
-// getBoneRouter returns mux for admin interface
-func (this *AdminApi) getBoneRouter(d *Hoverfly) *bone.Mux {
-	mux := bone.New()
-
+// Will add the handlers to the router.
+func (this *AdminApi) addAdminApiRoutes(router *bone.Mux, d *Hoverfly) *bone.Mux {
 	authHandler := &handlers.AuthHandler{
-		d.Authentication,
-		d.Cfg.SecretKey,
-		d.Cfg.JWTExpirationDelta,
-		d.Cfg.AuthEnabled,
+		AB:                 d.Authentication,
+		SecretKey:          d.Cfg.SecretKey,
+		JWTExpirationDelta: d.Cfg.JWTExpirationDelta,
+		Enabled:            d.Cfg.AuthEnabled,
 	}
 
-	authHandler.RegisterRoutes(mux)
+	authHandler.RegisterRoutes(router)
 
-	handlers := GetAllHandlers(d)
+	handlers := getAllHandlers(d)
 	for _, handler := range handlers {
-		handler.RegisterRoutes(mux, authHandler)
+		handler.RegisterRoutes(router, authHandler)
 	}
 
+	return router
+}
+
+// Will add the dashboard front-end to the router.
+// To update the front-end, please run `make build-ui`.
+func (this *AdminApi) addDashboardRoutes(router *bone.Mux) *bone.Mux {
 	// preparing static assets for embedded admin
 	statikFS, err := fs.New()
 
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Error": err.Error(),
-		}).Error("Failed to load statikFS, admin UI might not work :(")
+		}).Error("Failed to load statikFS")
 	}
 
 	indexHandler := func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("index.html")
 		file, err := statikFS.Open("/index.html")
 		if err != nil {
 			w.WriteHeader(500)
@@ -78,33 +82,37 @@ func (this *AdminApi) getBoneRouter(d *Hoverfly) *bone.Mux {
 		w.WriteHeader(200)
 	}
 
-	mux.HandleFunc("/dashboard", indexHandler)
-	mux.HandleFunc("/login", indexHandler)
-	mux.Handle("/", http.FileServer(statikFS))
-	mux.Handle("/*.js", http.FileServer(statikFS))
-	mux.Handle("/*.css", http.FileServer(statikFS))
-	mux.Handle("/*.ico", http.FileServer(statikFS))
+	router.HandleFunc("/dashboard", indexHandler)
+	router.HandleFunc("/login", indexHandler)
+	router.Handle("/", http.FileServer(statikFS))
+	router.Handle("/*.js", http.FileServer(statikFS))
+	router.Handle("/*.css", http.FileServer(statikFS))
+	router.Handle("/*.ico", http.FileServer(statikFS))
 
-	return mux
+	return router
 }
 
-func GetAllHandlers(hoverfly *Hoverfly) []handlers.AdminHandler {
-	var list []handlers.AdminHandler
+func getAllHandlers(hoverfly *Hoverfly) []handlers.AdminHandler {
+	list := []handlers.AdminHandler{
+		&handlers.HealthHandler{},
 
-	list = append(list, &v1.HealthHandler{})
-	list = append(list, &v1.MetadataHandler{Hoverfly: hoverfly})
-	list = append(list, &v2.HoverflyHandler{Hoverfly: hoverfly})
-	list = append(list, &v2.HoverflyDestinationHandler{Hoverfly: hoverfly})
-	list = append(list, &v2.HoverflyModeHandler{Hoverfly: hoverfly})
-	list = append(list, &v2.HoverflyMiddlewareHandler{Hoverfly: hoverfly})
-	list = append(list, &v2.HoverflyUsageHandler{Hoverfly: hoverfly})
-	list = append(list, &v2.HoverflyVersionHandler{Hoverfly: hoverfly})
-	list = append(list, &v2.HoverflyUpstreamProxyHandler{Hoverfly: hoverfly})
-	list = append(list, &v2.SimulationHandler{Hoverfly: hoverfly})
-	list = append(list, &v2.CacheHandler{Hoverfly: hoverfly})
-	list = append(list, &v2.LogsHandler{Hoverfly: hoverfly.StoreLogsHook})
-	list = append(list, &v2.JournalHandler{Hoverfly: hoverfly.Journal})
-	list = append(list, &v2.ShutdownHandler{})
+		&v2.HoverflyHandler{Hoverfly: hoverfly},
+		&v2.HoverflyDestinationHandler{Hoverfly: hoverfly},
+		&v2.HoverflyModeHandler{Hoverfly: hoverfly},
+		&v2.HoverflyMiddlewareHandler{Hoverfly: hoverfly},
+		&v2.HoverflyUsageHandler{Hoverfly: hoverfly},
+		&v2.HoverflyVersionHandler{Hoverfly: hoverfly},
+		&v2.HoverflyUpstreamProxyHandler{Hoverfly: hoverfly},
+		&v2.HoverflyPACHandler{Hoverfly: hoverfly},
+		&v2.HoverflyCORSHandler{Hoverfly: hoverfly},
+		&v2.SimulationHandler{Hoverfly: hoverfly},
+		&v2.CacheHandler{Hoverfly: hoverfly},
+		&v2.LogsHandler{Hoverfly: hoverfly.StoreLogsHook},
+		&v2.JournalHandler{Hoverfly: hoverfly.Journal},
+		&v2.ShutdownHandler{},
+		&v2.StateHandler{Hoverfly: hoverfly},
+		&v2.DiffHandler{Hoverfly: hoverfly},
+	}
 
 	return list
 }

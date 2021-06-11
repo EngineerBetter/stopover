@@ -49,11 +49,12 @@ var _ = Describe("Stopover", func() {
 			bytes, err := ioutil.ReadFile(simulation_path)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			simulation := v2.SimulationViewV3{}
+			simulation := v2.SimulationViewV5{}
 			err = json.Unmarshal(bytes, &simulation)
 			Ω(err).ShouldNot(HaveOccurred())
 
-			err = hfly.PutSimulation(simulation)
+			result := hfly.PutSimulation(simulation)
+			err = result.GetError()
 			Ω(err).ShouldNot(HaveOccurred())
 		}
 
@@ -152,7 +153,7 @@ $ stopover https://ci.server.tld my-team my-pipeline my-job job-build-id`)
 
 		It("exits 1 with a useful error message", func() {
 			Eventually(session).Should(gexec.Exit(1))
-			Ω(session.Err).Should(Say("error getting build for job \\[Get not-valid-url/api/v1/teams/team/pipelines/pipeline/jobs/job/builds/1: unsupported protocol scheme \"\"\\]"))
+			Ω(session.Err.Contents()).Should(ContainSubstring("error getting build for job [Get \"not-valid-url/api/v1/teams/team/pipelines/pipeline/jobs/job/builds/1\": unsupported protocol scheme \"\"]"))
 		})
 	})
 })

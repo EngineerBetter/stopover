@@ -1,8 +1,8 @@
 package metrics
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"github.com/rcrowley/go-metrics"
+	log "github.com/sirupsen/logrus"
 
 	"time"
 )
