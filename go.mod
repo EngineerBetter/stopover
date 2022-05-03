@@ -1,9 +1,8 @@
-module github.com/fidelityinternational/stopover
+module github.com/FidelityInternational/stopover
 
 go 1.18
 
 require (
-	github.com/FidelityInternational/stopover v0.0.0-20210610115138-ac819eb9cdb2
 	github.com/SpectoLabs/hoverfly v1.3.6
 	github.com/concourse/concourse v1.6.1-0.20210527193308-09f694307bf4
 	github.com/onsi/ginkgo v1.16.5

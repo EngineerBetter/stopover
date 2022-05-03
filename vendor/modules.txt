@@ -11,9 +11,6 @@ github.com/ChrisTrenkamp/xsel/grammar/token
 github.com/ChrisTrenkamp/xsel/node
 github.com/ChrisTrenkamp/xsel/parser
 github.com/ChrisTrenkamp/xsel/store
-# github.com/FidelityInternational/stopover v0.0.0-20210610115138-ac819eb9cdb2
-## explicit; go 1.16
-github.com/FidelityInternational/stopover
 # github.com/SpectoLabs/goproxy v0.0.0-20210903210251-3c7af5e91597
 ## explicit; go 1.16
 github.com/SpectoLabs/goproxy
