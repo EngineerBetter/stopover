@@ -35,7 +35,7 @@ type StudentsT struct {
 	// standard deviation by std = Sigma * sqrt(Nu/(Nu-2))
 	Sigma float64
 
-	// Nu is the shape prameter of the distribution, representing the number of
+	// Nu is the shape parameter of the distribution, representing the number of
 	// degrees of the distribution, and one less than the number of observations
 	// from a Normal distribution.
 	Nu float64
@@ -151,7 +151,7 @@ func (s StudentsT) Survival(x float64) float64 {
 //
 // The variance is undefined for ν <= 1, and this returns math.NaN().
 func (s StudentsT) Variance() float64 {
-	if s.Nu < 1 {
+	if s.Nu <= 1 {
 		return math.NaN()
 	}
 	if s.Nu <= 2 {

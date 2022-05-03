@@ -68,10 +68,7 @@ func MarshalPayload(w io.Writer, models interface{}) error {
 		return err
 	}
 
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		return err
-	}
-	return nil
+	return json.NewEncoder(w).Encode(payload)
 }
 
 // Marshal does the same as MarshalPayload except it just returns the payload
@@ -128,10 +125,7 @@ func MarshalPayloadWithoutIncluded(w io.Writer, model interface{}) error {
 	}
 	payload.clearIncluded()
 
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		return err
-	}
-	return nil
+	return json.NewEncoder(w).Encode(payload)
 }
 
 // marshalOne does the same as MarshalOnePayload except it just returns the
@@ -195,11 +189,7 @@ func MarshalOnePayloadEmbedded(w io.Writer, model interface{}) error {
 
 	payload := &OnePayload{Data: rootNode}
 
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		return err
-	}
-
-	return nil
+	return json.NewEncoder(w).Encode(payload)
 }
 
 func visitModelNode(model interface{}, included *map[string]*Node,
@@ -280,6 +270,9 @@ func visitModelNode(model interface{}, included *map[string]*Node,
 				// We had a JSON float (numeric), but our field was not one of the
 				// allowed numeric types
 				er = ErrBadJSONAPIID
+			}
+
+			if er != nil {
 				break
 			}
 
@@ -290,7 +283,7 @@ func visitModelNode(model interface{}, included *map[string]*Node,
 				node.ClientID = clientID
 			}
 		} else if annotation == annotationAttribute {
-			var omitEmpty, iso8601 bool
+			var omitEmpty, iso8601, rfc3339 bool
 
 			if len(args) > 2 {
 				for _, arg := range args[2:] {
@@ -299,6 +292,8 @@ func visitModelNode(model interface{}, included *map[string]*Node,
 						omitEmpty = true
 					case annotationISO8601:
 						iso8601 = true
+					case annotationRFC3339:
+						rfc3339 = true
 					}
 				}
 			}
@@ -316,6 +311,8 @@ func visitModelNode(model interface{}, included *map[string]*Node,
 
 				if iso8601 {
 					node.Attributes[args[1]] = t.UTC().Format(iso8601TimeFormat)
+				} else if rfc3339 {
+					node.Attributes[args[1]] = t.UTC().Format(time.RFC3339)
 				} else {
 					node.Attributes[args[1]] = t.Unix()
 				}
@@ -336,6 +333,8 @@ func visitModelNode(model interface{}, included *map[string]*Node,
 
 					if iso8601 {
 						node.Attributes[args[1]] = tm.UTC().Format(iso8601TimeFormat)
+					} else if rfc3339 {
+						node.Attributes[args[1]] = tm.UTC().Format(time.RFC3339)
 					} else {
 						node.Attributes[args[1]] = tm.Unix()
 					}

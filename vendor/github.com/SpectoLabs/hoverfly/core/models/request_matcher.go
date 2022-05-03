@@ -1,11 +1,10 @@
 package models
 
 import (
-	"net/url"
-
 	"github.com/SpectoLabs/hoverfly/core/handlers/v2"
 	"github.com/SpectoLabs/hoverfly/core/matching/matchers"
 	"github.com/SpectoLabs/hoverfly/core/util"
+	"net/url"
 )
 
 type RequestFieldMatchers struct {
@@ -196,6 +195,10 @@ func (q *QueryRequestFieldMatchers) Add(k string, v []RequestFieldMatchers) {
 	(*q)[k] = v
 }
 
+func (q *QueryRequestFieldMatchers) Get(k string) []RequestFieldMatchers {
+	return (*q)[k]
+}
+
 func (this RequestMatcher) IncludesHeaderMatching() bool {
 	return this.Headers != nil && len(this.Headers) > 0
 }
@@ -204,25 +207,37 @@ func (this RequestMatcher) IncludesStateMatching() bool {
 	return this.RequiresState != nil && len(this.RequiresState) > 0
 }
 
-func (this RequestMatcher) ToEagerlyCachable() *RequestDetails {
+func (this RequestMatcher) ToEagerlyCacheable() *RequestDetails {
 	if this.Body == nil || len(this.Body) != 1 || this.Body[0].Matcher != matchers.Exact ||
 		this.Destination == nil || len(this.Destination) != 1 || this.Destination[0].Matcher != matchers.Exact ||
 		this.Method == nil || len(this.Method) != 1 || this.Method[0].Matcher != matchers.Exact ||
 		this.Path == nil || len(this.Path) != 1 || this.Path[0].Matcher != matchers.Exact ||
-		this.DeprecatedQuery == nil || len(this.DeprecatedQuery) != 1 || this.DeprecatedQuery[0].Matcher != matchers.Exact ||
+		this.DeprecatedQuery != nil && len(this.DeprecatedQuery) == 1 && this.DeprecatedQuery[0].Matcher != matchers.Exact ||
 		this.Scheme == nil || len(this.Scheme) != 1 || this.Scheme[0].Matcher != matchers.Exact {
 		return nil
 	}
 
-	if this.Headers != nil && len(this.Headers) > 0 {
+	if this.IncludesHeaderMatching() {
 		return nil
 	}
 
-	if this.RequiresState != nil && len(this.RequiresState) > 0 {
+	if this.IncludesStateMatching() {
 		return nil
 	}
 
-	query, _ := url.ParseQuery(this.DeprecatedQuery[0].Value.(string))
+	query := make(map[string][]string)
+	if this.Query != nil && len(*this.Query) > 0 {
+		for key, valueMatchers := range *this.Query {
+			for _, valueMatcher := range valueMatchers {
+				if valueMatcher.Matcher != matchers.Exact {
+					return nil
+				}
+				query[key] = []string{valueMatcher.Value.(string)}
+			}
+		}
+	} else if this.DeprecatedQuery != nil && len(this.DeprecatedQuery) == 1 {
+		query, _ = url.ParseQuery(this.DeprecatedQuery[0].Value.(string))
+	}
 
 	return &RequestDetails{
 		Body:        this.Body[0].Value.(string),

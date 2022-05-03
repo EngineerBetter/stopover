@@ -46,7 +46,6 @@ func (hf *Hoverfly) DoRequest(request *http.Request) (*http.Response, error) {
 
 // GetResponse returns stored response from cache
 func (hf *Hoverfly) GetResponse(requestDetails models.RequestDetails) (*models.ResponseDetails, *errors.HoverflyError) {
-
 	var response models.ResponseDetails
 	var cachedResponse *models.CachedResponse
 
@@ -66,7 +65,7 @@ func (hf *Hoverfly) GetResponse(requestDetails models.RequestDetails) (*models.R
 		result := matching.Match(mode.MatchingStrategy, requestDetails, hf.Cfg.Webserver, hf.Simulation, hf.state)
 
 		// Cache result
-		if result.Cachable {
+		if result.Cacheable {
 			cachedResponse, _ = hf.CacheMatcher.SaveRequestMatcherResponsePair(requestDetails, result.Pair, result.Error)
 		}
 
@@ -89,9 +88,7 @@ func (hf *Hoverfly) GetResponse(requestDetails models.RequestDetails) (*models.R
 	// Templating applies at the end, once we have loaded a response. Comes BEFORE state transitions,
 	// as we use the current state in templates
 	if response.Templated == true {
-
 		responseBody, err := hf.applyBodyTemplating(&requestDetails, &response, cachedResponse)
-
 		if err == nil {
 			response.Body = responseBody
 		} else {
@@ -99,11 +96,17 @@ func (hf *Hoverfly) GetResponse(requestDetails models.RequestDetails) (*models.R
 		}
 
 		responseHeaders, err := hf.applyHeadersTemplating(&requestDetails, &response, cachedResponse)
-
 		if err == nil {
 			response.Headers = responseHeaders
 		} else {
 			log.Warnf("Failed to applying headers templating: %s", err.Error())
+		}
+
+		responseTransitionsState, err := hf.applyTransitionsStateTemplating(&requestDetails, &response, cachedResponse)
+		if err == nil {
+			response.TransitionsState = responseTransitionsState
+		} else {
+			log.Warnf("Failed to applying transitions state templating: %s", err.Error())
 		}
 	}
 
@@ -111,6 +114,7 @@ func (hf *Hoverfly) GetResponse(requestDetails models.RequestDetails) (*models.R
 	if response.TransitionsState != nil {
 		hf.state.PatchState(response.TransitionsState)
 	}
+
 	if response.RemovesState != nil {
 		hf.state.RemoveState(response.RemovesState)
 	}
@@ -190,6 +194,38 @@ func (hf *Hoverfly) readResponseBodyFile(filePath string) (string, error) {
 	}
 
 	return string(fileContents[:]), nil
+}
+
+func (hf *Hoverfly) applyTransitionsStateTemplating(requestDetails *models.RequestDetails, response *models.ResponseDetails, cachedResponse *models.CachedResponse) (map[string]string, error) {
+	if response.TransitionsState == nil {
+		return nil, nil
+	}
+
+	var stateTemplates map[string]*raymond.Template
+	if cachedResponse != nil && cachedResponse.ResponseStateTemplates != nil {
+		stateTemplates = cachedResponse.ResponseStateTemplates
+	} else {
+		stateTemplates = map[string]*raymond.Template{}
+		for k, v := range response.TransitionsState {
+			stateTemplates[k], _ = hf.templator.ParseTemplate(v)
+		}
+
+		if cachedResponse != nil {
+			cachedResponse.ResponseStateTemplates = stateTemplates
+		}
+	}
+
+	var err error
+	state := make(map[string]string)
+
+	for k, v := range stateTemplates {
+		state[k], err = hf.templator.RenderTemplate(v, requestDetails, hf.state.State)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return state, nil
 }
 
 func (hf *Hoverfly) applyBodyTemplating(requestDetails *models.RequestDetails, response *models.ResponseDetails, cachedResponse *models.CachedResponse) (string, error) {
@@ -361,7 +397,7 @@ func (hf *Hoverfly) Save(request *models.RequestDetails, response *models.Respon
 	return nil
 }
 
-func (hf Hoverfly) ApplyMiddleware(pair models.RequestResponsePair) (models.RequestResponsePair, error) {
+func (hf *Hoverfly) ApplyMiddleware(pair models.RequestResponsePair) (models.RequestResponsePair, error) {
 	if hf.Cfg.Middleware.IsSet() {
 		return hf.Cfg.Middleware.Execute(pair)
 	}

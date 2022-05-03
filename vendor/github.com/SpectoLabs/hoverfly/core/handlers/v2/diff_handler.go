@@ -51,12 +51,12 @@ func (this *DiffHandler) Get(w http.ResponseWriter, req *http.Request, next http
 	}
 
 	handlers.WriteResponse(w, marshal)
-	w.WriteHeader(http.StatusOK)
 }
 
 func (this *DiffHandler) Delete(w http.ResponseWriter, req *http.Request, next http.HandlerFunc) {
 	this.Hoverfly.ClearDiff()
-	w.WriteHeader(http.StatusOK)
+
+	handlers.WriteResponse(w, []byte(""))
 }
 
 func (this *DiffHandler) Options(w http.ResponseWriter, r *http.Request, next http.HandlerFunc) {

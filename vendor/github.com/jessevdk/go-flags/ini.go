@@ -499,6 +499,10 @@ func (i *IniParser) matchingGroups(name string) []*Group {
 func (i *IniParser) parse(ini *ini) error {
 	p := i.parser
 
+	p.eachOption(func(cmd *Command, group *Group, option *Option) {
+		option.clearReferenceBeforeSet = true
+	})
+
 	var quotesLookup = make(map[*Option]bool)
 
 	for name, section := range ini.Sections {
@@ -541,9 +545,8 @@ func (i *IniParser) parse(ini *ini) error {
 				continue
 			}
 
-			// ini value is ignored if override is set and
-			// value was previously set from non default
-			if i.ParseAsDefaults && !opt.isSetDefault {
+			// ini value is ignored if parsed as default but defaults are prevented
+			if i.ParseAsDefaults && opt.preventDefault {
 				continue
 			}
 
@@ -576,13 +579,24 @@ func (i *IniParser) parse(ini *ini) error {
 				}
 			}
 
-			if err := opt.set(pval); err != nil {
+			var err error
+
+			if i.ParseAsDefaults {
+				err = opt.setDefault(pval)
+			} else {
+				err = opt.set(pval)
+			}
+
+			if err != nil {
 				return &IniError{
 					Message:    err.Error(),
 					File:       ini.File,
 					LineNumber: inival.LineNumber,
 				}
 			}
+
+			// Defaults from ini files take precendence over defaults from parser
+			opt.preventDefault = true
 
 			// either all INI values are quoted or only values who need quoting
 			if _, ok := quotesLookup[opt]; !inival.Quoted || !ok {
